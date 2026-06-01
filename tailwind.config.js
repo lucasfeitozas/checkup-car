@@ -10,6 +10,14 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
+      fontFamily: {
+        jakarta: [
+          "PlusJakartaSans_400Regular",
+          "PlusJakartaSans_500Medium",
+          "PlusJakartaSans_600SemiBold",
+          "PlusJakartaSans_700Bold",
+        ],
+      },
       colors: {
         background: "var(--background)",
         surface: "var(--surface)",

@@ -7,9 +7,14 @@ type CardProps = ViewProps & {
 export function Card({ padded = true, className, ...props }: CardProps) {
   return (
     <View
-      className={`rounded-lg border border-border bg-surface ${padded ? "p-4" : ""} ${
-        className ?? ""
-      }`}
+      className={`rounded-xl bg-surface shadow-sm ${padded ? "p-4" : ""} ${className ?? ""}`}
+      style={{
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+      }}
       {...props}
     />
   );

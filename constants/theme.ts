@@ -16,23 +16,23 @@ export type AppTheme = {
 export const lightTheme: AppTheme = {
   name: "light",
   background: "#FFFFFF",
-  surface: "#F7F7F8",
-  primary: "#C8102E",
-  accent: "#003B9A",
+  surface: "#F5F5F5",
+  primary: "#E53935",
+  accent: "#E53935",
   text: "#1A1A1A",
-  muted: "#6B7280",
-  border: "#E5E7EB",
+  muted: "#757575",
+  border: "#E0E0E0",
 };
 
 export const darkTheme: AppTheme = {
   name: "dark",
-  background: "#0A0A0F",
-  surface: "#14141C",
-  primary: "#1565FF",
-  accent: "#003B9A",
-  text: "#F0F0F0",
-  muted: "#A1A1AA",
-  border: "#27272A",
+  background: "#121212",
+  surface: "#1E1E1E",
+  primary: "#2196F3",
+  accent: "#2196F3",
+  text: "#FFFFFF",
+  muted: "#B0BEC5",
+  border: "#333333",
 };
 
 export const themes = {

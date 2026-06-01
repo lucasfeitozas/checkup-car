@@ -10,8 +10,8 @@ export default function VehiclesScreen() {
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5">
       <View>
-        <Text className="text-3xl font-bold text-text">Veiculos</Text>
-        <Text className="mt-1 text-base text-muted">Cadastro e acompanhamento da frota.</Text>
+        <Text className="font-jakarta text-2xl font-bold text-text">Veículos</Text>
+        <Text className="font-jakarta mt-1 text-base text-muted">Gerencie sua frota.</Text>
       </View>
 
       {vehicles.map((vehicle) => (

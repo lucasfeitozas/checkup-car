@@ -29,7 +29,7 @@ export function Button({ title, variant = "primary", disabled, className, ...pro
       disabled={disabled}
       {...props}
     >
-      <Text className={`text-base font-semibold ${textClasses[variant]}`}>{title}</Text>
+      <Text className={`font-jakarta text-base font-bold ${textClasses[variant]}`}>{title}</Text>
     </Pressable>
   );
 }

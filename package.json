@@ -18,6 +18,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.4.0",
@@ -26,6 +27,7 @@
     "expo": "~55.0.0",
     "expo-auth-session": "~55.0.0",
     "expo-constants": "~55.0.0",
+    "expo-font": "^56.0.5",
     "expo-linking": "~55.0.0",
     "expo-notifications": "~55.0.0",
     "expo-router": "~55.0.16",

@@ -18,6 +18,10 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: theme.background },
+        headerTitleStyle: {
+          fontFamily: "PlusJakartaSans_700Bold",
+          fontSize: 18,
+        },
         headerTintColor: theme.text,
         headerShadowVisible: false,
         tabBarActiveTintColor: theme.primary,
@@ -25,6 +29,12 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: theme.background,
           borderTopColor: theme.border,
+          elevation: 0,
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: {
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 12,
         },
       }}
     >
