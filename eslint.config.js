@@ -24,5 +24,12 @@ module.exports = [
       ],
     },
   },
+  {
+    files: ["**/__tests__/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/consistent-type-imports": "off",
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   prettier,
 ];

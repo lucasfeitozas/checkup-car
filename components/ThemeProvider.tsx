@@ -63,13 +63,13 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   );
 
   const cssVariables = vars({
-    "--color-background": theme.background,
-    "--color-surface": theme.surface,
-    "--color-primary": theme.primary,
-    "--color-accent": theme.accent,
-    "--color-text": theme.text,
-    "--color-muted": theme.muted,
-    "--color-border": theme.border,
+    "--background": theme.background,
+    "--surface": theme.surface,
+    "--primary": theme.primary,
+    "--accent": theme.accent,
+    "--text": theme.text,
+    "--muted": theme.muted,
+    "--border": theme.border,
   });
 
   return (

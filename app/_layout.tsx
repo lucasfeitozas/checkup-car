@@ -17,6 +17,7 @@ import {
 import { ThemeProvider, useAppTheme } from "@/components/ThemeProvider";
 import { DatabaseProvider } from "@/db/client";
 import { bootstrapAuth } from "@/lib/auth";
+import { useVehicleStore } from "@/store/vehicleStore";
 
 // Mantém a splash screen visível enquanto as fontes carregam
 SplashScreen.preventAutoHideAsync();
@@ -37,6 +38,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void bootstrapAuth();
+    void useVehicleStore.getState().hydrate();
   }, []);
 
   if (!fontsLoaded && !fontError) {
