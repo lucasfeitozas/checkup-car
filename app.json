@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "CheckUp Car",
+    "slug": "checkup-car",
+    "scheme": "checkupcar",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.checkupcar.app"
+    },
+    "android": {
+      "package": "com.checkupcar.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#C8102E"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}
