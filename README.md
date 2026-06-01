@@ -40,12 +40,12 @@ O app funciona 100% sem internet para uso do dia a dia. Login social com Google 
 
 Inspirada nos **Bumbás de Parintins**, o app oferece dois temas alternáveis que seguem automaticamente o tema do sistema operacional (claro/escuro).
 
-| | Tema claro — Caprichoso | Tema escuro — Noite de Parintins |
-|---|---|---|
-| **Fundo** | `#FFFFFF` | `#0A0A0F` |
-| **Primário** | `#003B9A` (azul) | `#1565FF` (azul neon) |
-| **Acento** | `#C8102E` (vermelho) | `#003B9A` (azul profundo) |
-| **Texto** | `#1A1A1A` | `#F0F0F0` |
+|              | Tema claro — Garantido      | Tema escuro — Caprichoso  |
+| ------------ | --------------------------- | ------------------------- |
+| **Fundo**    | `#FFFFFF`                   | `#0A0A0F`                 |
+| **Primário** | `#C8102E` (vermelho)        | `#1565FF` (azul neon)     |
+| **Acento**   | `#003B9A` (azul Caprichoso) | `#003B9A` (azul profundo) |
+| **Texto**    | `#1A1A1A`                   | `#F0F0F0`                 |
 
 A troca de tema é instantânea via `useColorScheme()` do React Native, sem necessidade de reload. Os tokens são definidos em `constants/theme.ts` e expostos como variáveis NativeWind no `tailwind.config.js`.
 
@@ -55,29 +55,29 @@ A troca de tema é instantânea via `useColorScheme()` do React Native, sem nece
 
 ### MVP — Épicos e histórias
 
-| # | Épico | Histórias |
-|---|---|---|
-| 1 | Cadastro de veículos | Cadastro manual, seleção de modelo, listagem, atualização de km |
-| 2 | Gestão de eventos | Evento pré-definido, personalizado, efetuar revisão, editar/excluir, ordenar |
-| 3 | Alertas e dashboard | Status por urgência (🟢🟠🔴), notificação diária, tela principal |
-| 4 | Histórico | Histórico por evento, linha do tempo geral do veículo |
-| 5 | Infraestrutura | Modelagem de dados, regras de cálculo de alertas |
-| 6 | Autenticação | Login local offline, login com Google, recuperação de senha |
+| #   | Épico                | Histórias                                                                    |
+| --- | -------------------- | ---------------------------------------------------------------------------- |
+| 1   | Cadastro de veículos | Cadastro manual, seleção de modelo, listagem, atualização de km              |
+| 2   | Gestão de eventos    | Evento pré-definido, personalizado, efetuar revisão, editar/excluir, ordenar |
+| 3   | Alertas e dashboard  | Status por urgência (🟢🟠🔴), notificação diária, tela principal             |
+| 4   | Histórico            | Histórico por evento, linha do tempo geral do veículo                        |
+| 5   | Infraestrutura       | Modelagem de dados, regras de cálculo de alertas                             |
+| 6   | Autenticação         | Login local offline, login com Google, recuperação de senha                  |
 
 ### Tipos de manutenção pré-cadastrados
 
-| Evento | Intervalo padrão | Fonte |
-|---|---|---|
-| Filtro de ar | 20.000–30.000 km | Mann |
-| Velas de ignição | 10.000 km | — |
-| Cabos de ignição | 50.000 km ou 3 anos | — |
-| Limpador de para-brisa | 12 meses | — |
-| Revisão de freios | 15.000 km | Bosch |
-| Fluido de freio | 10.000 km ou 12 meses | Bosch |
-| Suspensão (preventiva) | 40.000–50.000 km | — |
-| Correia dentada | verificação 15.000 km / troca 50.000 km | Goodyear |
-| Líquido de arrefecimento | 30.000 km ou 12 meses | — |
-| Alinhamento e balanceamento | 10.000 km | — |
+| Evento                      | Intervalo padrão                        | Fonte    |
+| --------------------------- | --------------------------------------- | -------- |
+| Filtro de ar                | 20.000–30.000 km                        | Mann     |
+| Velas de ignição            | 10.000 km                               | —        |
+| Cabos de ignição            | 50.000 km ou 3 anos                     | —        |
+| Limpador de para-brisa      | 12 meses                                | —        |
+| Revisão de freios           | 15.000 km                               | Bosch    |
+| Fluido de freio             | 10.000 km ou 12 meses                   | Bosch    |
+| Suspensão (preventiva)      | 40.000–50.000 km                        | —        |
+| Correia dentada             | verificação 15.000 km / troca 50.000 km | Goodyear |
+| Líquido de arrefecimento    | 30.000 km ou 12 meses                   | —        |
+| Alinhamento e balanceamento | 10.000 km                               | —        |
 
 ### Sistema de alertas por km restante
 
@@ -100,21 +100,21 @@ percentual_restante = km_restante / intervalo_km × 100
 Expo SDK 55 (managed workflow) + React Native 0.83 — Nova Arquitetura obrigatória
 ```
 
-| Camada | Tecnologia | Versão |
-|---|---|---|
-| Framework | Expo (managed) | SDK 55 |
-| Linguagem | TypeScript | strict mode |
-| Navegação | Expo Router | v4 (file-based) |
-| Estilização | NativeWind | v4 (Tailwind CSS) |
-| Estado global | Zustand | latest |
-| Banco de dados | expo-sqlite + Drizzle ORM | latest |
-| Autenticação local | expo-secure-store | latest |
-| Login social | Google Identity (OAuth 2.0) | latest |
-| Animações | React Native Reanimated | v4 |
-| Notificações | expo-notifications | latest |
-| Build / Deploy | EAS Build + EAS Update (OTA) | latest |
-| Testes | Jest + React Native Testing Library | latest |
-| Qualidade | ESLint + Prettier + Husky | latest |
+| Camada             | Tecnologia                          | Versão            |
+| ------------------ | ----------------------------------- | ----------------- |
+| Framework          | Expo (managed)                      | SDK 55            |
+| Linguagem          | TypeScript                          | strict mode       |
+| Navegação          | Expo Router                         | v4 (file-based)   |
+| Estilização        | NativeWind                          | v4 (Tailwind CSS) |
+| Estado global      | Zustand                             | latest            |
+| Banco de dados     | expo-sqlite + Drizzle ORM           | latest            |
+| Autenticação local | expo-secure-store                   | latest            |
+| Login social       | Google Identity (OAuth 2.0)         | latest            |
+| Animações          | React Native Reanimated             | v4                |
+| Notificações       | expo-notifications                  | latest            |
+| Build / Deploy     | EAS Build + EAS Update (OTA)        | latest            |
+| Testes             | Jest + React Native Testing Library | latest            |
+| Qualidade          | ESLint + Prettier + Husky           | latest            |
 
 > **Atenção:** A Nova Arquitetura é **obrigatória** no Expo SDK 55 (não pode ser desativada). Toda biblioteca adicionada ao projeto deve ser compatível com ela.
 
@@ -227,21 +227,21 @@ historico_execucao {
 ### Cálculo de próxima manutenção
 
 ```typescript
-proxima_km   = ultima_km_execucao + intervalo_km
-proxima_data = ultima_data_execucao + intervalo_meses
+proxima_km = ultima_km_execucao + intervalo_km;
+proxima_data = ultima_data_execucao + intervalo_meses;
 
-km_restante          = proxima_km - km_atual_do_carro
-percentual_restante  = (km_restante / intervalo_km) * 100
+km_restante = proxima_km - km_atual_do_carro;
+percentual_restante = (km_restante / intervalo_km) * 100;
 ```
 
 ### Status de alerta
 
 ```typescript
 function getAlertStatus(percentual: number, dataVencida: boolean): AlertStatus {
-  if (dataVencida || percentual < 1)  return 'vermelho'
-  if (percentual <= 2)                return 'laranja'
-  if (percentual <= 5)                return 'verde'
-  return 'neutro'
+  if (dataVencida || percentual < 1) return "vermelho";
+  if (percentual <= 2) return "laranja";
+  if (percentual <= 5) return "verde";
+  return "neutro";
 }
 ```
 
@@ -251,7 +251,17 @@ Se o evento tem os dois critérios definidos, o status crítico é acionado quan
 
 ---
 
-## Pré-requisitos
+## 🌐 Considerações para Web
+
+Para que o banco de dados `expo-sqlite` funcione no navegador, o projeto utiliza `wa-sqlite` com WebAssembly (WASM). Isso exige:
+
+1.  **Headers de Segurança**: O servidor deve fornecer os cabeçalhos `Cross-Origin-Opener-Policy: same-origin` e `Cross-Origin-Embedder-Policy: require-corp`. No desenvolvimento, isso já está configurado no `metro.config.js`.
+2.  **Suporte WASM**: O Metro está configurado para incluir arquivos `.wasm` no bundle.
+3.  **Fallback de Storage**: Como o `expo-secure-store` não é nativo na Web, utilizamos uma abstração em `lib/storage.ts` que faz o fallback automático para `localStorage`.
+
+---
+
+## Arquitetura e stack
 
 - Node.js >= 20
 - npm >= 10 ou yarn >= 4
@@ -264,24 +274,33 @@ Se o evento tem os dois critérios definidos, o status crítico é acionado quan
 
 ## Instalação e setup
 
-```bash
+````bash
 # 1. Clonar o repositório
 git clone https://github.com/seu-usuario/checklist-car.git
 cd checklist-car
 
 # 2. Instalar dependências
-npm install
+```bash
+npm install --legacy-peer-deps
+````
+
+_Nota: O uso de --legacy-peer-deps é necessário devido às versões experimentais do Reanimated 4 e Worklets._
 
 # 3. Configurar variáveis de ambiente
+
 cp .env.example .env
+
 # Editar .env com suas credenciais (ver seção abaixo)
 
 # 4. Rodar as migrations do banco local
+
 npx drizzle-kit push
 
 # 5. Iniciar o app em modo desenvolvimento
+
 npx expo start
-```
+
+````
 
 Para rodar em dispositivo físico, escaneie o QR code com o app **Expo Go** (Android) ou via **TestFlight** (iOS com build de desenvolvimento).
 
@@ -296,7 +315,7 @@ Crie um arquivo `.env` na raiz do projeto com base no `.env.example`:
 EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=xxxxxxxxxxxx.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=xxxxxxxxxxxx.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=xxxxxxxxxxxx.apps.googleusercontent.com
-```
+````
 
 > As variáveis prefixadas com `EXPO_PUBLIC_` são expostas ao bundle do cliente. Nunca coloque chaves secretas de servidor aqui.
 
@@ -350,8 +369,8 @@ Perfis configurados em `eas.json`:
 {
   "build": {
     "development": { "developmentClient": true, "distribution": "internal" },
-    "preview":     { "distribution": "internal" },
-    "production":  { "autoIncrement": true }
+    "preview": { "distribution": "internal" },
+    "production": { "autoIncrement": true }
   }
 }
 ```
@@ -360,28 +379,28 @@ Perfis configurados em `eas.json`:
 
 ## Backlog resumido
 
-| ID | História | Épico | Prioridade |
-|---|---|---|---|
-| US-00 | Setup do projeto e infraestrutura | Infra | 🔴 Bloqueante |
-| US-01 | Cadastrar novo veículo manualmente | Cadastro | 🔴 Alta |
-| US-02 | Selecionar modelo pré-cadastrado | Cadastro | 🟠 Média |
-| US-03 | Listar e alternar entre veículos | Cadastro | 🔴 Alta |
-| US-04 | Atualizar km atual do veículo | Cadastro | 🔴 Alta |
-| US-05 | Cadastrar evento com tipo pré-definido | Eventos | 🔴 Alta |
-| US-06 | Cadastrar evento personalizado | Eventos | 🟠 Média |
-| US-07 | Registrar execução de evento (efetuar) | Eventos | 🔴 Alta |
-| US-08 | Editar e excluir eventos | Eventos | 🟠 Média |
-| US-09 | Ordenar e filtrar lista de eventos | Eventos | 🟡 Baixa |
-| US-10 | Ver status de alerta por urgência | Alertas | 🔴 Alta |
-| US-11 | Receber notificação diária | Alertas | 🟠 Média |
-| US-12 | Tela principal com visão geral | Alertas | 🔴 Alta |
-| US-13 | Histórico de execuções por evento | Histórico | 🟠 Média |
-| US-14 | Linha do tempo geral do veículo | Histórico | 🟡 Baixa |
-| TS-01 | Modelagem do banco de dados | Infra | 🔴 Bloqueante |
-| TS-02 | Regras de negócio para alertas | Infra | 🔴 Bloqueante |
-| US-15 | Login e cadastro local (offline) | Auth | 🔴 Alta · MVP |
-| US-16 | Login com Google (OAuth 2.0) | Auth | 🟠 Média |
-| US-17 | Recuperação de senha (conta local) | Auth | 🟠 Média |
+| ID    | História                               | Épico     | Prioridade    |
+| ----- | -------------------------------------- | --------- | ------------- |
+| US-00 | Setup do projeto e infraestrutura      | Infra     | 🔴 Bloqueante |
+| US-01 | Cadastrar novo veículo manualmente     | Cadastro  | 🔴 Alta       |
+| US-02 | Selecionar modelo pré-cadastrado       | Cadastro  | 🟠 Média      |
+| US-03 | Listar e alternar entre veículos       | Cadastro  | 🔴 Alta       |
+| US-04 | Atualizar km atual do veículo          | Cadastro  | 🔴 Alta       |
+| US-05 | Cadastrar evento com tipo pré-definido | Eventos   | 🔴 Alta       |
+| US-06 | Cadastrar evento personalizado         | Eventos   | 🟠 Média      |
+| US-07 | Registrar execução de evento (efetuar) | Eventos   | 🔴 Alta       |
+| US-08 | Editar e excluir eventos               | Eventos   | 🟠 Média      |
+| US-09 | Ordenar e filtrar lista de eventos     | Eventos   | 🟡 Baixa      |
+| US-10 | Ver status de alerta por urgência      | Alertas   | 🔴 Alta       |
+| US-11 | Receber notificação diária             | Alertas   | 🟠 Média      |
+| US-12 | Tela principal com visão geral         | Alertas   | 🔴 Alta       |
+| US-13 | Histórico de execuções por evento      | Histórico | 🟠 Média      |
+| US-14 | Linha do tempo geral do veículo        | Histórico | 🟡 Baixa      |
+| TS-01 | Modelagem do banco de dados            | Infra     | 🔴 Bloqueante |
+| TS-02 | Regras de negócio para alertas         | Infra     | 🔴 Bloqueante |
+| US-15 | Login e cadastro local (offline)       | Auth      | 🔴 Alta · MVP |
+| US-16 | Login com Google (OAuth 2.0)           | Auth      | 🟠 Média      |
+| US-17 | Recuperação de senha (conta local)     | Auth      | 🟠 Média      |
 
 ---
 
