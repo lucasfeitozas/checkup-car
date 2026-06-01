@@ -1,6 +1,6 @@
 # 🚗 CheckList Car
 
-> App mobile de controle e acompanhamento de manutenções veiculares, inspirado na identidade visual dos Bumbás de Parintins.
+> App mobile de controle e acompanhamento de manutenções veiculares.
 
 ![React Native](https://img.shields.io/badge/React_Native-0.83-blue?logo=react)
 ![Expo SDK](https://img.shields.io/badge/Expo-SDK_55-black?logo=expo)
