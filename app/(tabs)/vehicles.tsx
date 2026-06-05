@@ -1,31 +1,14 @@
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { VehicleCard } from "@/components/features/VehicleCard";
 import { Button } from "@/components/ui/Button";
-import { useVehicleStore } from "@/store/vehicleStore";
-
-const MAX_VEHICLES_PER_USER = 5;
-
-function normalizePlate(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-function formatPlate(value: string) {
-  const v = normalizePlate(value);
-  if (/^[A-Z]{3}\d{4}$/.test(v)) {
-    return `${v.slice(0, 3)}-${v.slice(3)}`;
-  }
-  return v;
-}
-
-function isValidPlate(value: string) {
-  const v = normalizePlate(value);
-  return /^[A-Z]{3}\d{4}$/.test(v) || /^[A-Z]{3}\d[A-Z]\d{2}$/.test(v);
-}
+import { MAX_VEHICLES_PER_USER, useVehicleStore } from "@/store/vehicleStore";
+import { formatPlate, validateNewVehicleInput } from "@/lib/vehicleValidation";
 
 export default function VehiclesScreen() {
+  const router = useRouter();
   const vehicles = useVehicleStore((state) => state.vehicles);
   const addVehicle = useVehicleStore((state) => state.addVehicle);
   const hydrate = useVehicleStore((state) => state.hydrate);
@@ -48,28 +31,24 @@ export default function VehiclesScreen() {
 
   const isLimitReached = vehicles.length >= MAX_VEHICLES_PER_USER;
 
-  const errors = useMemo(() => {
-    const next: string[] = [];
-
-    if (isLimitReached) next.push(`Limite de ${MAX_VEHICLES_PER_USER} veículos atingido.`);
-
-    if (!plate.trim()) next.push("Placa é obrigatória.");
-    if (plate.trim() && !isValidPlate(plate)) next.push("Placa inválida. Use AAA-0000 ou AAA0A00.");
-    if (!nickname.trim()) next.push("Nome/apelido é obrigatório.");
-    if (!model.trim()) next.push("Modelo é obrigatório.");
-
+  const validationErrors = useMemo(() => {
     const parsedYear = Number.parseInt(year, 10);
-    if (!year.trim() || Number.isNaN(parsedYear)) next.push("Ano é obrigatório.");
-
     const parsedKm = Number.parseInt(currentKm, 10);
-    if (!currentKm.trim() || Number.isNaN(parsedKm) || parsedKm < 0) {
-      next.push("Km atual deve ser um número maior ou igual a zero.");
-    }
 
-    return next;
-  }, [currentKm, isLimitReached, model, nickname, plate, year]);
+    return validateNewVehicleInput(
+      {
+        plate,
+        nickname,
+        brand,
+        model,
+        year: Number.isNaN(parsedYear) ? undefined : parsedYear,
+        currentKm: Number.isNaN(parsedKm) ? undefined : parsedKm,
+      },
+      vehicles,
+    );
+  }, [brand, currentKm, model, nickname, plate, vehicles, year]);
 
-  const isSubmitDisabled = errors.length > 0;
+  const isSubmitDisabled = validationErrors.length > 0;
 
   function resetForm() {
     setPlate("");
@@ -81,8 +60,11 @@ export default function VehiclesScreen() {
   }
 
   async function handleCreateVehicle() {
-    if (errors.length > 0) {
-      Alert.alert("Não foi possível cadastrar", errors[0]);
+    if (validationErrors.length > 0) {
+      const firstError = validationErrors[0];
+      if (firstError) {
+        Alert.alert("Não foi possível cadastrar", firstError.message);
+      }
       return;
     }
 
@@ -149,9 +131,13 @@ export default function VehiclesScreen() {
         </View>
       ) : (
         vehicles.map((vehicle) => (
-          <Link href={{ pathname: "/vehicle/[id]", params: { id: vehicle.id } }} key={vehicle.id}>
-            <VehicleCard vehicle={vehicle} />
-          </Link>
+          <VehicleCard
+            key={vehicle.id}
+            vehicle={vehicle}
+            onPress={() => {
+              router.push({ pathname: "/vehicle/[id]", params: { id: vehicle.id } });
+            }}
+          />
         ))
       )}
 

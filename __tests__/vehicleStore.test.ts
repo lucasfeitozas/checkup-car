@@ -93,4 +93,43 @@ describe("vehicleStore", () => {
 
     expect(secureStoreMock.setItemAsync).toHaveBeenCalledWith(key, expect.any(String));
   });
+
+  it("returns the created vehicle after addVehicle", async () => {
+    const created = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ plate: "ABC-1234" }));
+
+    expect(created).toMatchObject({
+      nickname: "Meu carro",
+      brand: "Toyota",
+      model: "Corolla",
+      year: 2022,
+      plate: "ABC-1234",
+      currentKm: 42000,
+    });
+    expect(created.id).toEqual(expect.any(String));
+  });
+
+  it("gets a vehicle by id", async () => {
+    const created = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ plate: "ABC-1234" }));
+
+    expect(useVehicleStore.getState().getVehicleById(created.id)).toEqual(created);
+  });
+
+  it("returns undefined when getting a missing vehicle by id", () => {
+    expect(useVehicleStore.getState().getVehicleById("missing-id")).toBeUndefined();
+  });
+
+  it("gets all vehicles as list items", async () => {
+    const first = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ nickname: "Carro A", plate: "ABC-1234" }));
+    const second = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ nickname: "Carro B", plate: "DEF-5678" }));
+
+    expect(useVehicleStore.getState().getVehicleList()).toEqual([second, first]);
+  });
 });

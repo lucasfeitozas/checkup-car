@@ -1,18 +1,20 @@
-import { Text, View } from "react-native";
+import type { ReactElement } from "react";
+import { Pressable, Text, View } from "react-native";
 
 import { Card } from "@/components/ui/Card";
-import type { Vehicle } from "@/store/vehicleStore";
+import type { VehicleListItem } from "@/store/vehicleStore";
 
-type VehicleCardProps = {
-  vehicle: Vehicle;
+export type VehicleCardProps = {
+  vehicle: VehicleListItem;
+  onPress?: () => void;
 };
 
-export function VehicleCard({ vehicle }: VehicleCardProps) {
+export function VehicleCard({ vehicle, onPress }: VehicleCardProps): ReactElement {
   const description = [vehicle.brand, vehicle.model, String(vehicle.year)]
     .filter(Boolean)
     .join(" ");
 
-  return (
+  const content = (
     <Card className="gap-3">
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1">
@@ -25,5 +27,15 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
       </View>
       <Text className="text-sm text-text">{vehicle.currentKm.toLocaleString("pt-BR")} km</Text>
     </Card>
+  );
+
+  if (!onPress) {
+    return content;
+  }
+
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} className="active:opacity-80">
+      {content}
+    </Pressable>
   );
 }
