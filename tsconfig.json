@@ -3,11 +3,12 @@
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "jsx": "react-native",
     "moduleResolution": "bundler",
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*", "./*"]
     },
     "strict": true
   },
