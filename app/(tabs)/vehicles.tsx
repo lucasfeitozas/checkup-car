@@ -1,31 +1,20 @@
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { VehicleCard } from "@/components/features/VehicleCard";
+import { useAppTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/Button";
-import { useVehicleStore } from "@/store/vehicleStore";
+import { MAX_VEHICLES_PER_USER, useVehicleStore } from "@/store/vehicleStore";
+import { formatPlate, normalizePlate, validateNewVehicleInput } from "@/lib/vehicleValidation";
 
-const MAX_VEHICLES_PER_USER = 5;
-
-function normalizePlate(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-function formatPlate(value: string) {
-  const v = normalizePlate(value);
-  if (/^[A-Z]{3}\d{4}$/.test(v)) {
-    return `${v.slice(0, 3)}-${v.slice(3)}`;
-  }
-  return v;
-}
-
-function isValidPlate(value: string) {
-  const v = normalizePlate(value);
-  return /^[A-Z]{3}\d{4}$/.test(v) || /^[A-Z]{3}\d[A-Z]\d{2}$/.test(v);
+function formatPlateInput(value: string): string {
+  return formatPlate(normalizePlate(value).slice(0, 7));
 }
 
 export default function VehiclesScreen() {
+  const router = useRouter();
+  const { theme } = useAppTheme();
   const vehicles = useVehicleStore((state) => state.vehicles);
   const addVehicle = useVehicleStore((state) => state.addVehicle);
   const hydrate = useVehicleStore((state) => state.hydrate);
@@ -48,28 +37,46 @@ export default function VehiclesScreen() {
 
   const isLimitReached = vehicles.length >= MAX_VEHICLES_PER_USER;
 
-  const errors = useMemo(() => {
-    const next: string[] = [];
-
-    if (isLimitReached) next.push(`Limite de ${MAX_VEHICLES_PER_USER} veículos atingido.`);
-
-    if (!plate.trim()) next.push("Placa é obrigatória.");
-    if (plate.trim() && !isValidPlate(plate)) next.push("Placa inválida. Use AAA-0000 ou AAA0A00.");
-    if (!nickname.trim()) next.push("Nome/apelido é obrigatório.");
-    if (!model.trim()) next.push("Modelo é obrigatório.");
-
+  const validationErrors = useMemo(() => {
     const parsedYear = Number.parseInt(year, 10);
-    if (!year.trim() || Number.isNaN(parsedYear)) next.push("Ano é obrigatório.");
-
     const parsedKm = Number.parseInt(currentKm, 10);
-    if (!currentKm.trim() || Number.isNaN(parsedKm) || parsedKm < 0) {
-      next.push("Km atual deve ser um número maior ou igual a zero.");
-    }
 
-    return next;
-  }, [currentKm, isLimitReached, model, nickname, plate, year]);
+    return validateNewVehicleInput(
+      {
+        plate,
+        nickname,
+        brand,
+        model,
+        year: Number.isNaN(parsedYear) ? undefined : parsedYear,
+        currentKm: Number.isNaN(parsedKm) ? undefined : parsedKm,
+      },
+      vehicles,
+    );
+  }, [brand, currentKm, model, nickname, plate, vehicles, year]);
 
-  const isSubmitDisabled = errors.length > 0;
+  const isSubmitDisabled = validationErrors.length > 0;
+  const firstValidationError = validationErrors[0];
+
+  function getFieldError(field: string): string | undefined {
+    return validationErrors.find((error) => error.field === field)?.message;
+  }
+
+  function inputClassName(): string {
+    return "min-h-12 rounded-lg border px-4";
+  }
+
+  function inputStyle(hasError: boolean) {
+    return {
+      backgroundColor: theme.background,
+      borderColor: hasError ? theme.primary : theme.border,
+      color: theme.text,
+    };
+  }
+
+  function shouldShowFieldError(field: string, value: string): boolean {
+    const error = getFieldError(field);
+    return Boolean(error && (value.trim().length > 0 || firstValidationError?.field === field));
+  }
 
   function resetForm() {
     setPlate("");
@@ -81,8 +88,11 @@ export default function VehiclesScreen() {
   }
 
   async function handleCreateVehicle() {
-    if (errors.length > 0) {
-      Alert.alert("Não foi possível cadastrar", errors[0]);
+    if (validationErrors.length > 0) {
+      const firstError = validationErrors[0];
+      if (firstError) {
+        Alert.alert("Não foi possível cadastrar", firstError.message);
+      }
       return;
     }
 
@@ -109,7 +119,7 @@ export default function VehiclesScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5">
+    <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5 pb-32">
       <View>
         <Text className="font-jakarta text-2xl font-bold text-text">Veículos</Text>
         <Text className="font-jakarta mt-1 text-base text-muted">Gerencie sua frota.</Text>
@@ -149,9 +159,13 @@ export default function VehiclesScreen() {
         </View>
       ) : (
         vehicles.map((vehicle) => (
-          <Link href={{ pathname: "/vehicle/[id]", params: { id: vehicle.id } }} key={vehicle.id}>
-            <VehicleCard vehicle={vehicle} />
-          </Link>
+          <VehicleCard
+            key={vehicle.id}
+            vehicle={vehicle}
+            onPress={() => {
+              router.push({ pathname: "/vehicle/[id]", params: { id: vehicle.id } });
+            }}
+          />
         ))
       )}
 
@@ -163,109 +177,223 @@ export default function VehiclesScreen() {
           setIsCreateOpen(false);
         }}
       >
-        <Pressable
-          className="flex-1 bg-black/40"
-          onPress={() => {
-            setIsCreateOpen(false);
-          }}
-        />
-        <View className="rounded-t-3xl bg-background p-5">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-jakarta text-lg font-bold text-text">Cadastrar veículo</Text>
-            <Pressable
-              onPress={() => {
-                setIsCreateOpen(false);
-              }}
-              className="rounded-lg border border-border px-3 py-2"
-              accessibilityRole="button"
+        <View className="flex-1 justify-end bg-black/40">
+          <Pressable
+            className="absolute inset-0"
+            onPress={() => {
+              setIsCreateOpen(false);
+            }}
+          />
+          <View className="rounded-t-3xl p-5" style={{ backgroundColor: theme.background, height: "92%" }}>
+            <View className="flex-row items-center justify-between">
+              <Text className="font-jakarta text-lg font-bold text-text">Cadastrar veículo</Text>
+              <Pressable
+                onPress={() => {
+                  setIsCreateOpen(false);
+                }}
+                className="rounded-lg border px-3 py-2"
+                accessibilityLabel="Fechar cadastro de veículo"
+                accessibilityRole="button"
+                style={{ borderColor: theme.border }}
+              >
+                <Text className="font-jakarta text-sm font-bold text-text">Fechar</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              className="mt-4 flex-1"
+              contentContainerClassName="gap-3 pb-4"
+              keyboardShouldPersistTaps="handled"
             >
-              <Text className="font-jakarta text-sm font-bold text-text">Fechar</Text>
-            </Pressable>
-          </View>
+              <View className="gap-2">
+                <Text className="font-jakarta text-sm font-semibold text-text">Placa</Text>
+                <TextInput
+                  value={plate}
+                  onChangeText={(v) => {
+                    setPlate(formatPlateInput(v));
+                    if (successMessage) setSuccessMessage(null);
+                  }}
+                  accessibilityHint="Use o formato antigo AAA-0000 ou o formato Mercosul AAA0A00."
+                  accessibilityLabel="Placa do veículo"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={8}
+                  placeholder="AAA-0000 ou AAA0A00"
+                  placeholderTextColor={theme.muted}
+                  className={inputClassName()}
+                  style={inputStyle(shouldShowFieldError("plate", plate))}
+                />
+                {shouldShowFieldError("plate", plate) ? (
+                  <Text
+                    className="font-jakarta text-xs font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {getFieldError("plate")}
+                  </Text>
+                ) : null}
+              </View>
 
-          <View className="mt-4 gap-3">
-            <View className="gap-2">
-              <Text className="font-jakarta text-sm font-semibold text-text">Placa</Text>
-              <TextInput
-                value={plate}
-                onChangeText={(v) => {
-                  setPlate(formatPlate(v));
-                  if (successMessage) setSuccessMessage(null);
+              <View className="gap-2">
+                <Text className="font-jakarta text-sm font-semibold text-text">Nome/apelido</Text>
+                <TextInput
+                  value={nickname}
+                  onChangeText={(v) => {
+                    setNickname(v);
+                    if (successMessage) setSuccessMessage(null);
+                  }}
+                  accessibilityLabel="Nome ou apelido do veículo"
+                  maxLength={50}
+                  placeholder="Ex: Meu carro"
+                  placeholderTextColor={theme.muted}
+                  className={inputClassName()}
+                  style={inputStyle(shouldShowFieldError("nickname", nickname))}
+                />
+                {shouldShowFieldError("nickname", nickname) ? (
+                  <Text
+                    className="font-jakarta text-xs font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {getFieldError("nickname")}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="gap-2">
+                <Text className="font-jakarta text-sm font-semibold text-text">
+                  Marca (opcional)
+                </Text>
+                <TextInput
+                  value={brand}
+                  onChangeText={(v) => {
+                    setBrand(v);
+                    if (successMessage) setSuccessMessage(null);
+                  }}
+                  accessibilityLabel="Marca do veículo"
+                  maxLength={100}
+                  placeholder="Ex: Toyota"
+                  placeholderTextColor={theme.muted}
+                  className={inputClassName()}
+                  style={inputStyle(shouldShowFieldError("brand", brand))}
+                />
+                {shouldShowFieldError("brand", brand) ? (
+                  <Text
+                    className="font-jakarta text-xs font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {getFieldError("brand")}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="gap-2">
+                <Text className="font-jakarta text-sm font-semibold text-text">Modelo</Text>
+                <TextInput
+                  value={model}
+                  onChangeText={(v) => {
+                    setModel(v);
+                    if (successMessage) setSuccessMessage(null);
+                  }}
+                  accessibilityLabel="Modelo do veículo"
+                  maxLength={100}
+                  placeholder="Ex: Corolla"
+                  placeholderTextColor={theme.muted}
+                  className={inputClassName()}
+                  style={inputStyle(shouldShowFieldError("model", model))}
+                />
+                {shouldShowFieldError("model", model) ? (
+                  <Text
+                    className="font-jakarta text-xs font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {getFieldError("model")}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="gap-2">
+                <Text className="font-jakarta text-sm font-semibold text-text">Ano</Text>
+                <TextInput
+                  value={year}
+                  onChangeText={(v) => {
+                    setYear(v.replace(/\D/g, "").slice(0, 4));
+                    if (successMessage) setSuccessMessage(null);
+                  }}
+                  accessibilityHint="Informe um ano entre 1900 e o ano atual."
+                  accessibilityLabel="Ano do veículo"
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  placeholder="Ex: 2022"
+                  placeholderTextColor={theme.muted}
+                  className={inputClassName()}
+                  style={inputStyle(shouldShowFieldError("year", year))}
+                />
+                {shouldShowFieldError("year", year) ? (
+                  <Text
+                    className="font-jakarta text-xs font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {getFieldError("year")}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="gap-2">
+                <Text className="font-jakarta text-sm font-semibold text-text">Km atual</Text>
+                <TextInput
+                  value={currentKm}
+                  onChangeText={(v) => {
+                    setCurrentKm(v.replace(/\D/g, "").slice(0, 9));
+                    if (successMessage) setSuccessMessage(null);
+                  }}
+                  accessibilityHint="Informe somente números. Zero é aceito para veículos sem uso registrado."
+                  accessibilityLabel="Quilometragem atual do veículo"
+                  keyboardType="number-pad"
+                  maxLength={9}
+                  placeholder="Ex: 42000"
+                  placeholderTextColor={theme.muted}
+                  className={inputClassName()}
+                  style={inputStyle(shouldShowFieldError("currentKm", currentKm))}
+                />
+                {shouldShowFieldError("currentKm", currentKm) ? (
+                  <Text
+                    className="font-jakarta text-xs font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {getFieldError("currentKm")}
+                  </Text>
+                ) : null}
+              </View>
+
+            </ScrollView>
+
+            <View
+              className="border-t pt-3"
+              style={{ backgroundColor: theme.background, borderTopColor: theme.border }}
+            >
+              {firstValidationError ? (
+                <Text
+                  className="font-jakarta mb-2 text-sm font-semibold"
+                  style={{ color: theme.primary }}
+                >
+                  {firstValidationError.message}
+                </Text>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isSubmitDisabled }}
+                className="min-h-12 items-center justify-center rounded-lg px-5"
+                disabled={isSubmitDisabled}
+                onPress={handleCreateVehicle}
+                style={{
+                  backgroundColor: theme.primary,
+                  opacity: isSubmitDisabled ? 0.5 : 1,
                 }}
-                autoCapitalize="characters"
-                placeholder="AAA-0000 ou AAA0A00"
-                className="min-h-12 rounded-lg border border-border bg-background px-4 text-text"
-              />
+              >
+                <Text className="font-jakarta text-base font-bold" style={{ color: "#FFFFFF" }}>
+                  Cadastrar
+                </Text>
+              </Pressable>
             </View>
-
-            <View className="gap-2">
-              <Text className="font-jakarta text-sm font-semibold text-text">Nome/apelido</Text>
-              <TextInput
-                value={nickname}
-                onChangeText={(v) => {
-                  setNickname(v);
-                  if (successMessage) setSuccessMessage(null);
-                }}
-                placeholder="Ex: Meu carro"
-                className="min-h-12 rounded-lg border border-border bg-background px-4 text-text"
-              />
-            </View>
-
-            <View className="gap-2">
-              <Text className="font-jakarta text-sm font-semibold text-text">Marca (opcional)</Text>
-              <TextInput
-                value={brand}
-                onChangeText={(v) => {
-                  setBrand(v);
-                  if (successMessage) setSuccessMessage(null);
-                }}
-                placeholder="Ex: Toyota"
-                className="min-h-12 rounded-lg border border-border bg-background px-4 text-text"
-              />
-            </View>
-
-            <View className="gap-2">
-              <Text className="font-jakarta text-sm font-semibold text-text">Modelo</Text>
-              <TextInput
-                value={model}
-                onChangeText={(v) => {
-                  setModel(v);
-                  if (successMessage) setSuccessMessage(null);
-                }}
-                placeholder="Ex: Corolla"
-                className="min-h-12 rounded-lg border border-border bg-background px-4 text-text"
-              />
-            </View>
-
-            <View className="gap-2">
-              <Text className="font-jakarta text-sm font-semibold text-text">Ano</Text>
-              <TextInput
-                value={year}
-                onChangeText={(v) => {
-                  setYear(v.replace(/\D/g, "").slice(0, 4));
-                  if (successMessage) setSuccessMessage(null);
-                }}
-                keyboardType="number-pad"
-                placeholder="Ex: 2022"
-                className="min-h-12 rounded-lg border border-border bg-background px-4 text-text"
-              />
-            </View>
-
-            <View className="gap-2">
-              <Text className="font-jakarta text-sm font-semibold text-text">Km atual</Text>
-              <TextInput
-                value={currentKm}
-                onChangeText={(v) => {
-                  setCurrentKm(v.replace(/\D/g, "").slice(0, 9));
-                  if (successMessage) setSuccessMessage(null);
-                }}
-                keyboardType="number-pad"
-                placeholder="Ex: 42000"
-                className="min-h-12 rounded-lg border border-border bg-background px-4 text-text"
-              />
-            </View>
-
-            <Button title="Cadastrar" onPress={handleCreateVehicle} disabled={isSubmitDisabled} />
           </View>
         </View>
       </Modal>

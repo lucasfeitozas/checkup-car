@@ -22,15 +22,27 @@ export type NewVehicleInput = {
   currentKm: number;
 };
 
-type VehicleState = {
+export type VehicleListItem = Pick<
+  Vehicle,
+  "id" | "nickname" | "brand" | "model" | "year" | "plate" | "currentKm"
+>;
+
+export type VehicleValidationError = {
+  field: "plate" | "nickname" | "brand" | "model" | "year" | "currentKm" | "limit";
+  message: string;
+};
+
+export type VehicleState = {
   vehicles: Vehicle[];
   isHydrated: boolean;
   hydrate: () => Promise<void>;
-  addVehicle: (vehicle: NewVehicleInput) => Promise<void>;
+  addVehicle: (vehicle: NewVehicleInput) => Promise<Vehicle>;
   updateKm: (vehicleId: string, currentKm: number) => Promise<void>;
+  getVehicleById: (vehicleId: string) => Vehicle | undefined;
+  getVehicleList: () => VehicleListItem[];
 };
 
-const MAX_VEHICLES_PER_USER = 5;
+export const MAX_VEHICLES_PER_USER = 5;
 const VEHICLES_KEY_PREFIX = "checkup-car.vehicles.";
 
 function canonicalizePlate(value: string) {
@@ -98,6 +110,8 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     try {
       await persistVehicles(nextVehicles);
     } catch {}
+
+    return vehicle;
   },
   async updateKm(vehicleId, currentKm) {
     const nextVehicles = get().vehicles.map((vehicle) =>
@@ -109,5 +123,11 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     try {
       await persistVehicles(nextVehicles);
     } catch {}
+  },
+  getVehicleById(vehicleId) {
+    return get().vehicles.find((vehicle) => vehicle.id === vehicleId);
+  },
+  getVehicleList() {
+    return get().vehicles;
   },
 }));

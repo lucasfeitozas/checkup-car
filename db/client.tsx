@@ -7,12 +7,16 @@ import * as schema from "@/db/schema";
 
 // No ambiente Web, o SharedArrayBuffer é necessário para o wa-sqlite.
 // Se não estiver disponível, o SQLite.openDatabaseSync falhará.
-const sqlite =
-  Platform.OS === "web" && typeof SharedArrayBuffer === "undefined"
-    ? null
-    : SQLite.openDatabaseSync("checkup-car.db", {
-        enableChangeListener: true,
-      });
+const canOpenSqlite =
+  Platform.OS !== "web" ||
+  (typeof window !== "undefined" && typeof SharedArrayBuffer !== "undefined");
+
+const sqlite = canOpenSqlite
+  ? SQLite.openDatabaseSync("checkup-car.db", {
+      enableChangeListener: Platform.OS !== "web",
+      useNewConnection: Platform.OS === "web",
+    })
+  : null;
 
 export const db = sqlite ? drizzle(sqlite, { schema }) : null;
 
