@@ -47,7 +47,7 @@ Inspirada nos **Bumbás de Parintins**, o app oferece dois temas alternáveis qu
 | **Acento**   | `#003B9A` (azul Caprichoso) | `#003B9A` (azul profundo) |
 | **Texto**    | `#1A1A1A`                   | `#F0F0F0`                 |
 
-A troca de tema é instantânea via `useColorScheme()` do React Native, sem necessidade de reload. Os tokens são definidos em `constants/theme.ts` e expostos como variáveis NativeWind no `tailwind.config.js`.
+A troca de tema é instantânea via `useColorScheme()` do React Native, sem necessidade de reload. Os tokens são definidos em `src/theme/theme.ts` e consumidos por `styled-components`.
 
 ---
 
@@ -100,21 +100,21 @@ percentual_restante = km_restante / intervalo_km × 100
 Expo SDK 55 (managed workflow) + React Native 0.83 — Nova Arquitetura obrigatória
 ```
 
-| Camada             | Tecnologia                          | Versão            |
-| ------------------ | ----------------------------------- | ----------------- |
-| Framework          | Expo (managed)                      | SDK 55            |
-| Linguagem          | TypeScript                          | strict mode       |
-| Navegação          | Expo Router                         | v4 (file-based)   |
-| Estilização        | NativeWind                          | v4 (Tailwind CSS) |
-| Estado global      | Zustand                             | latest            |
-| Banco de dados     | expo-sqlite + Drizzle ORM           | latest            |
-| Autenticação local | expo-secure-store                   | latest            |
-| Login social       | Google Identity (OAuth 2.0)         | latest            |
-| Animações          | React Native Reanimated             | v4                |
-| Notificações       | expo-notifications                  | latest            |
-| Build / Deploy     | EAS Build + EAS Update (OTA)        | latest            |
-| Testes             | Jest + React Native Testing Library | latest            |
-| Qualidade          | ESLint + Prettier + Husky           | latest            |
+| Camada             | Tecnologia                          | Versão          |
+| ------------------ | ----------------------------------- | --------------- |
+| Framework          | Expo (managed)                      | SDK 55          |
+| Linguagem          | TypeScript                          | strict mode     |
+| Navegação          | Expo Router                         | v4 (file-based) |
+| Estilização        | styled-components/native            | v6              |
+| Estado global      | Zustand                             | latest          |
+| Banco de dados     | expo-sqlite + Drizzle ORM           | latest          |
+| Autenticação local | expo-secure-store                   | latest          |
+| Login social       | Google Identity (OAuth 2.0)         | latest          |
+| Animações          | React Native Reanimated             | v4              |
+| Notificações       | expo-notifications                  | latest          |
+| Build / Deploy     | EAS Build + EAS Update (OTA)        | latest          |
+| Testes             | Jest + React Native Testing Library | latest          |
+| Qualidade          | ESLint + Prettier + Husky           | latest          |
 
 > **Atenção:** A Nova Arquitetura é **obrigatória** no Expo SDK 55 (não pode ser desativada). Toda biblioteca adicionada ao projeto deve ser compatível com ela.
 
@@ -124,62 +124,73 @@ Expo SDK 55 (managed workflow) + React Native 0.83 — Nova Arquitetura obrigat�
 
 ```
 checklist-car/
-├── app/                          # Expo Router — rotas = arquivos
-│   ├── _layout.tsx               # Root layout (ThemeProvider, AuthGuard)
-│   ├── (auth)/
-│   │   ├── _layout.tsx
-│   │   ├── login.tsx             # US-15 / US-16
-│   │   └── register.tsx          # US-15
-│   └── (tabs)/
-│       ├── _layout.tsx           # Tab navigator
-│       ├── index.tsx             # US-12 — Dashboard principal
-│       ├── vehicles.tsx          # US-03 — Lista de veículos
-│       └── history.tsx           # US-14 — Linha do tempo geral
+├── src/
+│   ├── app/                      # Expo Router — rotas finas
+│   │   ├── _layout.tsx           # Providers globais e root stack
+│   │   ├── (auth)/
+│   │   │   ├── _layout.tsx
+│   │   │   ├── login.tsx         # Re-export de features/auth/screens
+│   │   │   └── register.tsx
+│   │   ├── (tabs)/
+│   │   │   ├── _layout.tsx       # Tab navigator
+│   │   │   ├── index.tsx         # Re-export de features/dashboard/screens
+│   │   │   ├── vehicles.tsx      # Re-export de features/vehicles/screens
+│   │   │   └── history.tsx       # Re-export de features/history/screens
+│   │   └── vehicle/
+│   │       └── [id].tsx          # Re-export do detalhe de veículo
+│   │
+│   ├── features/                 # Contextos de negócio
+│   │   ├── auth/
+│   │   │   ├── screens/
+│   │   │   ├── services/
+│   │   │   └── stores/
+│   │   ├── dashboard/
+│   │   │   └── screens/
+│   │   ├── history/
+│   │   │   └── screens/
+│   │   └── vehicles/
+│   │       ├── components/
+│   │       ├── rules/
+│   │       ├── screens/
+│   │       └── stores/
+│   │
+│   ├── components/
+│   │   └── common/               # UI genérica e sem dependência de domínio
+│   │       ├── Button.tsx
+│   │       ├── Button.test.tsx
+│   │       ├── Card.tsx
+│   │       ├── ThemeToggle.tsx
+│   │       └── styled.ts
+│   │
+│   ├── core/                     # Infraestrutura global
+│   │   ├── db/
+│   │   │   ├── schema.ts
+│   │   │   ├── client.tsx
+│   │   │   └── migrations/
+│   │   ├── notifications/
+│   │   └── storage/
+│   │
+│   └── theme/                    # Tokens e provider de tema
+│       ├── ThemeProvider.tsx
+│       └── theme.ts
 │
-├── components/
-│   ├── ui/                       # Componentes genéricos
-│   │   ├── Button.tsx
-│   │   ├── Card.tsx
-│   │   ├── Badge.tsx
-│   │   └── AlertIndicator.tsx    # 🟢🟠🔴
-│   └── features/                 # Componentes de domínio
-│       ├── VehicleCard.tsx
-│       ├── EventCard.tsx
-│       ├── KmInput.tsx
-│       └── EventForm.tsx
-│
-├── store/                        # Zustand slices
-│   ├── authStore.ts
-│   ├── vehicleStore.ts
-│   └── eventStore.ts
-│
-├── db/                           # Drizzle ORM
-│   ├── schema.ts                 # Definição das tabelas (ver modelo de dados)
-│   ├── client.ts                 # Instância do expo-sqlite
-│   └── migrations/
-│
-├── lib/
-│   ├── auth.ts                   # Login local + Google OAuth
-│   ├── notifications.ts          # expo-notifications
-│   ├── alerts.ts                 # Lógica de cálculo de status 🟢🟠🔴
-│   └── crypto.ts                 # Hash de senha (bcrypt-like)
-│
-├── constants/
-│   ├── theme.ts                  # Tokens de cor (Bumbás)
-│   └── maintenanceEvents.ts      # Intervalos padrão por tipo de evento
-│
-├── tailwind.config.js            # NativeWind + variáveis de tema
 ├── drizzle.config.ts
 ├── eas.json                      # Perfis: development / preview / production
 ├── app.json
 └── tsconfig.json                 # strict: true
 ```
 
+### Fluxo para novas features
+
+Novas funcionalidades devem nascer em `src/features/<nome-da-feature>/`. Crie apenas as pastas necessárias para a feature (`screens`, `components`, `hooks`, `services`, `stores`, `rules`, `types`) e mantenha regras de negócio, validações e persistência dentro desse contexto. Promova código para `src/components/common`, `src/core` ou `src/theme` somente quando ele for realmente global.
+
+Para expor uma tela na navegação, adicione um arquivo fino em `src/app/` que reexporte a screen da feature. Tests devem ficar próximos ao código validado com o padrão `*.test.ts` ou `*.test.tsx`. Imports internos devem usar o alias `@/`.
+
 ---
 
 ## Modelo de dados
 
-Definido via **Drizzle ORM** em `db/schema.ts`.
+Definido via **Drizzle ORM** em `src/core/db/schema.ts`.
 
 ```typescript
 // Usuário
@@ -257,7 +268,7 @@ Para que o banco de dados `expo-sqlite` funcione no navegador, o projeto utiliza
 
 1.  **Headers de Segurança**: O servidor deve fornecer os cabeçalhos `Cross-Origin-Opener-Policy: same-origin` e `Cross-Origin-Embedder-Policy: require-corp`. No desenvolvimento, isso já está configurado no `metro.config.js`.
 2.  **Suporte WASM**: O Metro está configurado para incluir arquivos `.wasm` no bundle.
-3.  **Fallback de Storage**: Como o `expo-secure-store` não é nativo na Web, utilizamos uma abstração em `lib/storage.ts` que faz o fallback automático para `localStorage`.
+3.  **Fallback de Storage**: Como o `expo-secure-store` não é nativo na Web, utilizamos uma abstração em `src/core/storage/storage.ts` que faz o fallback automático para `localStorage`.
 
 ---
 
