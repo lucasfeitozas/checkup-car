@@ -7,7 +7,15 @@ type TabIconName = keyof typeof Ionicons.glyphMap;
 
 function tabIcon(name: TabIconName) {
   return function Icon({ color, size }: { color: string; size: number }) {
-    return <Ionicons color={color} name={name} size={size} />;
+    return (
+      <Ionicons
+        accessibilityElementsHidden
+        color={color}
+        importantForAccessibility="no"
+        name={name}
+        size={size}
+      />
+    );
   };
 }
 
@@ -30,11 +38,18 @@ export default function TabsLayout() {
           backgroundColor: theme.background,
           borderTopColor: theme.border,
           elevation: 0,
+          height: 82,
           borderTopWidth: 1,
+          paddingBottom: 12,
+          paddingTop: 10,
+        },
+        tabBarItemStyle: {
+          minHeight: 58,
         },
         tabBarLabelStyle: {
           fontFamily: "PlusJakartaSans_600SemiBold",
           fontSize: 12,
+          lineHeight: 16,
         },
       }}
     >
@@ -48,14 +63,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="vehicles"
         options={{
-          title: "Veiculos",
+          title: "Veículos",
+          tabBarAccessibilityLabel: "Veículos",
           tabBarIcon: tabIcon("car-sport-outline"),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
-          title: "Historico",
+          title: "Histórico",
+          tabBarAccessibilityLabel: "Histórico",
           tabBarIcon: tabIcon("time-outline"),
         }}
       />

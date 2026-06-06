@@ -21,11 +21,13 @@ export function VehicleCard({ vehicle, onPress }: VehicleCardProps): ReactElemen
           <Text className="text-lg font-semibold text-text">{vehicle.nickname}</Text>
           <Text className="mt-1 text-sm text-muted">{description}</Text>
         </View>
-        <Text className="rounded-md bg-primary px-2 py-1 text-xs font-semibold text-white">
+        <Text className="rounded-md bg-primary px-2 py-1 text-xs font-bold text-white">
           {vehicle.plate}
         </Text>
       </View>
-      <Text className="text-sm text-text">{vehicle.currentKm.toLocaleString("pt-BR")} km</Text>
+      <Text className="text-sm font-semibold text-text">
+        {vehicle.currentKm.toLocaleString("pt-BR")} km
+      </Text>
     </Card>
   );
 
