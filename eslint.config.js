@@ -4,6 +4,9 @@ const tsParser = require("@typescript-eslint/parser");
 const tsPlugin = require("@typescript-eslint/eslint-plugin");
 
 module.exports = [
+  {
+    ignores: ["dist/**", ".expo/**", "node_modules/**"],
+  },
   ...expo,
   {
     files: ["**/*.{ts,tsx}"],
