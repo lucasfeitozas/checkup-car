@@ -1,9 +1,18 @@
 import { router } from "expo-router";
-import { Text, View } from "react-native";
+import { styled } from "styled-components/native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { AppText, Column, Title } from "@/components/ui/styled";
 import { getGoogleOAuthConfig } from "@/lib/auth";
+
+const AuthScreen = styled.View`
+  flex: 1;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  background-color: ${({ theme }) => theme.background};
+`;
 
 export default function LoginScreen() {
   const oauthConfig = getGoogleOAuthConfig();
@@ -12,15 +21,15 @@ export default function LoginScreen() {
   );
 
   return (
-    <View className="flex-1 justify-center gap-6 bg-background p-6">
-      <View>
-        <Text className="text-3xl font-bold text-text">CheckUp Car</Text>
-        <Text className="mt-2 text-base text-muted">
+    <AuthScreen>
+      <Column $gap={8}>
+        <Title>CheckUp Car</Title>
+        <AppText $color="muted" $size={16}>
           Controle local-first para revisoes e manutencoes.
-        </Text>
-      </View>
+        </AppText>
+      </Column>
 
-      <Card className="gap-4">
+      <Card $gap={16}>
         <Button title="Entrar em modo local" onPress={() => router.replace("/(tabs)")} />
         <Button
           title={isGoogleConfigured ? "Continuar com Google" : "Configurar Google OAuth"}
@@ -33,6 +42,6 @@ export default function LoginScreen() {
           onPress={() => router.push("/(auth)/register")}
         />
       </Card>
-    </View>
+    </AuthScreen>
   );
 }

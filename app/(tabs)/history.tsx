@@ -1,17 +1,18 @@
-import { ScrollView, Text } from "react-native";
-
 import { Card } from "@/components/ui/Card";
+import { AppText, Screen, Title } from "@/components/ui/styled";
 
 export default function HistoryScreen() {
   return (
-    <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5 pb-32">
-      <Text className="text-3xl font-bold text-text">Histórico</Text>
-      <Card className="gap-2">
-        <Text className="text-lg font-semibold text-text">Linha do tempo</Text>
-        <Text className="text-sm text-muted">
+    <Screen>
+      <Title>Histórico</Title>
+      <Card $gap={8}>
+        <AppText $size={18} $weight={600}>
+          Linha do tempo
+        </AppText>
+        <AppText $color="muted">
           Os registros de manutenção serão carregados de historico_execucao.
-        </Text>
+        </AppText>
       </Card>
-    </ScrollView>
+    </Screen>
   );
 }

@@ -1,7 +1,9 @@
 import type { ReactElement } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable } from "react-native";
+import { styled } from "styled-components/native";
 
 import { Card } from "@/components/ui/Card";
+import { AppText, Column, Row } from "@/components/ui/styled";
 import type { VehicleListItem } from "@/store/vehicleStore";
 
 export type VehicleCardProps = {
@@ -9,25 +11,34 @@ export type VehicleCardProps = {
   onPress?: () => void;
 };
 
+const PlateBadge = styled(AppText).attrs({
+  $color: "white",
+  $size: 12,
+  $weight: 700,
+})`
+  align-self: flex-start;
+  background-color: ${({ theme }) => theme.primary};
+  border-radius: 6px;
+  padding: 4px 8px;
+`;
+
 export function VehicleCard({ vehicle, onPress }: VehicleCardProps): ReactElement {
   const description = [vehicle.brand, vehicle.model, String(vehicle.year)]
     .filter(Boolean)
     .join(" ");
 
   const content = (
-    <Card className="gap-3">
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-lg font-semibold text-text">{vehicle.nickname}</Text>
-          <Text className="mt-1 text-sm text-muted">{description}</Text>
-        </View>
-        <Text className="rounded-md bg-primary px-2 py-1 text-xs font-bold text-white">
-          {vehicle.plate}
-        </Text>
-      </View>
-      <Text className="text-sm font-semibold text-text">
-        {vehicle.currentKm.toLocaleString("pt-BR")} km
-      </Text>
+    <Card $gap={12}>
+      <Row $align="flex-start" $justify="space-between" $gap={12}>
+        <Column $flex={1} $gap={4}>
+          <AppText $size={18} $weight={600}>
+            {vehicle.nickname}
+          </AppText>
+          <AppText $color="muted">{description}</AppText>
+        </Column>
+        <PlateBadge>{vehicle.plate}</PlateBadge>
+      </Row>
+      <AppText $weight={600}>{vehicle.currentKm.toLocaleString("pt-BR")} km</AppText>
     </Card>
   );
 
@@ -36,7 +47,7 @@ export function VehicleCard({ vehicle, onPress }: VehicleCardProps): ReactElemen
   }
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} className="active:opacity-80">
+    <Pressable accessibilityRole="button" onPress={onPress}>
       {content}
     </Pressable>
   );

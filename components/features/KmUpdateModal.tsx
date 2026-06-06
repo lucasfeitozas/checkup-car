@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { Modal } from "react-native";
+import { styled } from "styled-components/native";
 
 import { useAppTheme } from "@/components/ThemeProvider";
+import { AppText, Column, Row } from "@/components/ui/styled";
 import type { Vehicle } from "@/store/vehicleStore";
 
 type KmUpdateModalProps = {
@@ -10,6 +12,45 @@ type KmUpdateModalProps = {
   onSubmit: (km: number) => Promise<void>;
   onDismiss: () => Promise<void> | void;
 };
+
+const Overlay = styled.View`
+  flex: 1;
+  justify-content: center;
+  padding: 0 20px;
+  background-color: rgba(0, 0, 0, 0.55);
+`;
+
+const Panel = styled.View`
+  gap: 16px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-color: ${({ theme }) => theme.border};
+  background-color: ${({ theme }) => theme.surface};
+  padding: 20px;
+`;
+
+const KmInput = styled.TextInput<{ $hasError: boolean }>`
+  min-height: 48px;
+  border-radius: 8px;
+  border-width: 1px;
+  padding: 0 16px;
+  background-color: ${({ theme }) => theme.background};
+  border-color: ${({ $hasError, theme }) => ($hasError ? theme.primary : theme.border)};
+  color: ${({ theme }) => theme.text};
+`;
+
+const ModalButton = styled.Pressable<{ $primary?: boolean; disabled?: boolean }>`
+  min-height: 48px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border-width: ${({ $primary }) => ($primary ? 0 : 1)}px;
+  border-color: ${({ theme }) => theme.border};
+  background-color: ${({ $primary, theme }) => ($primary ? theme.primary : "transparent")};
+  opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
+  padding: 0 16px;
+`;
 
 export function KmUpdateModal({ visible, vehicle, onSubmit, onDismiss }: KmUpdateModalProps) {
   const { theme } = useAppTheme();
@@ -51,28 +92,24 @@ export function KmUpdateModal({ visible, vehicle, onSubmit, onDismiss }: KmUpdat
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onDismiss}>
-      <View
-        className="flex-1 justify-center px-5"
-        style={{ backgroundColor: "rgba(0, 0, 0, 0.55)" }}
-      >
-        <View
-          className="gap-4 rounded-xl border p-5"
-          style={{ backgroundColor: theme.surface, borderColor: theme.border }}
-        >
-          <View className="gap-1">
-            <Text className="font-jakarta text-lg font-bold text-text">Atualizar km atual</Text>
-            <Text className="font-jakarta text-sm text-muted">
+      <Overlay>
+        <Panel>
+          <Column $gap={4}>
+            <AppText $size={18} $weight={700}>
+              Atualizar km atual
+            </AppText>
+            <AppText $color="muted">
               {vehicle
                 ? `${vehicle.nickname}: último registro ${vehicle.currentKm.toLocaleString(
                     "pt-BR",
                   )} km`
                 : "Selecione um veículo para atualizar."}
-            </Text>
-          </View>
+            </AppText>
+          </Column>
 
-          <View className="gap-2">
-            <Text className="font-jakarta text-sm font-semibold text-text">Km atual</Text>
-            <TextInput
+          <Column $gap={8}>
+            <AppText $weight={600}>Km atual</AppText>
+            <KmInput
               value={km}
               onChangeText={(value) => {
                 setKm(value.replace(/\D/g, "").slice(0, 9));
@@ -83,44 +120,33 @@ export function KmUpdateModal({ visible, vehicle, onSubmit, onDismiss }: KmUpdat
               maxLength={9}
               placeholder="Ex: 43000"
               placeholderTextColor={theme.muted}
-              className="min-h-12 rounded-lg border px-4 text-text"
-              style={{
-                backgroundColor: theme.background,
-                borderColor: error ? theme.primary : theme.border,
-                color: theme.text,
-              }}
+              $hasError={Boolean(error)}
             />
             {error ? (
-              <Text className="font-jakarta text-sm font-semibold" style={{ color: theme.primary }}>
+              <AppText $color="primary" $weight={600}>
                 {error}
-              </Text>
+              </AppText>
             ) : null}
-          </View>
+          </Column>
 
-          <View className="flex-row gap-3">
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-12 flex-1 items-center justify-center rounded-lg border border-border px-4 active:opacity-80"
-              onPress={onDismiss}
-              disabled={isSaving}
-            >
-              <Text className="font-jakarta text-sm font-bold text-text">Agora não</Text>
-            </Pressable>
-            <Pressable
+          <Row $gap={12}>
+            <ModalButton accessibilityRole="button" onPress={onDismiss} disabled={isSaving}>
+              <AppText $weight={700}>Agora não</AppText>
+            </ModalButton>
+            <ModalButton
               accessibilityRole="button"
               accessibilityState={{ disabled: isInvalid }}
-              className="min-h-12 flex-1 items-center justify-center rounded-lg px-4"
               disabled={isInvalid}
               onPress={handleSubmit}
-              style={{ opacity: isInvalid ? 0.5 : 1, backgroundColor: theme.primary }}
+              $primary
             >
-              <Text className="font-jakarta text-sm font-bold text-white">
+              <AppText $color="white" $weight={700}>
                 {isSaving ? "Salvando..." : "Salvar km"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
+              </AppText>
+            </ModalButton>
+          </Row>
+        </Panel>
+      </Overlay>
     </Modal>
   );
 }

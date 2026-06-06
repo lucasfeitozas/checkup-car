@@ -47,7 +47,7 @@ Inspirada nos **Bumbás de Parintins**, o app oferece dois temas alternáveis qu
 | **Acento**   | `#003B9A` (azul Caprichoso) | `#003B9A` (azul profundo) |
 | **Texto**    | `#1A1A1A`                   | `#F0F0F0`                 |
 
-A troca de tema é instantânea via `useColorScheme()` do React Native, sem necessidade de reload. Os tokens são definidos em `constants/theme.ts` e expostos como variáveis NativeWind no `tailwind.config.js`.
+A troca de tema é instantânea via `useColorScheme()` do React Native, sem necessidade de reload. Os tokens são definidos em `constants/theme.ts` e consumidos por `styled-components`.
 
 ---
 
@@ -100,21 +100,21 @@ percentual_restante = km_restante / intervalo_km × 100
 Expo SDK 55 (managed workflow) + React Native 0.83 — Nova Arquitetura obrigatória
 ```
 
-| Camada             | Tecnologia                          | Versão            |
-| ------------------ | ----------------------------------- | ----------------- |
-| Framework          | Expo (managed)                      | SDK 55            |
-| Linguagem          | TypeScript                          | strict mode       |
-| Navegação          | Expo Router                         | v4 (file-based)   |
-| Estilização        | NativeWind                          | v4 (Tailwind CSS) |
-| Estado global      | Zustand                             | latest            |
-| Banco de dados     | expo-sqlite + Drizzle ORM           | latest            |
-| Autenticação local | expo-secure-store                   | latest            |
-| Login social       | Google Identity (OAuth 2.0)         | latest            |
-| Animações          | React Native Reanimated             | v4                |
-| Notificações       | expo-notifications                  | latest            |
-| Build / Deploy     | EAS Build + EAS Update (OTA)        | latest            |
-| Testes             | Jest + React Native Testing Library | latest            |
-| Qualidade          | ESLint + Prettier + Husky           | latest            |
+| Camada             | Tecnologia                          | Versão          |
+| ------------------ | ----------------------------------- | --------------- |
+| Framework          | Expo (managed)                      | SDK 55          |
+| Linguagem          | TypeScript                          | strict mode     |
+| Navegação          | Expo Router                         | v4 (file-based) |
+| Estilização        | styled-components/native            | v6              |
+| Estado global      | Zustand                             | latest          |
+| Banco de dados     | expo-sqlite + Drizzle ORM           | latest          |
+| Autenticação local | expo-secure-store                   | latest          |
+| Login social       | Google Identity (OAuth 2.0)         | latest          |
+| Animações          | React Native Reanimated             | v4              |
+| Notificações       | expo-notifications                  | latest          |
+| Build / Deploy     | EAS Build + EAS Update (OTA)        | latest          |
+| Testes             | Jest + React Native Testing Library | latest          |
+| Qualidade          | ESLint + Prettier + Husky           | latest          |
 
 > **Atenção:** A Nova Arquitetura é **obrigatória** no Expo SDK 55 (não pode ser desativada). Toda biblioteca adicionada ao projeto deve ser compatível com ela.
 
@@ -168,7 +168,6 @@ checklist-car/
 │   ├── theme.ts                  # Tokens de cor (Bumbás)
 │   └── maintenanceEvents.ts      # Intervalos padrão por tipo de evento
 │
-├── tailwind.config.js            # NativeWind + variáveis de tema
 ├── drizzle.config.ts
 ├── eas.json                      # Perfis: development / preview / production
 ├── app.json

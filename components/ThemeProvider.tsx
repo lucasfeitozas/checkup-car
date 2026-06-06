@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { useColorScheme, View } from "react-native";
-import { vars } from "nativewind";
+import { ThemeProvider as StyledThemeProvider } from "styled-components/native";
 
 import { themes, type AppTheme } from "@/constants/theme";
 import { storage } from "@/lib/storage";
@@ -62,24 +62,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     [theme, userPreference],
   );
 
-  const cssVariables = vars({
-    "--color-background": theme.background,
-    "--color-surface": theme.surface,
-    "--color-primary": theme.primary,
-    "--color-accent": theme.accent,
-    "--color-text": theme.text,
-    "--color-muted": theme.muted,
-    "--color-border": theme.border,
-  });
-
   return (
     <ThemeContext.Provider value={value}>
-      <View
-        className="flex-1 bg-background"
-        style={[cssVariables, { fontFamily: "PlusJakartaSans_400Regular" }]}
-      >
-        {children}
-      </View>
+      <StyledThemeProvider theme={theme}>
+        <View style={{ flex: 1, backgroundColor: theme.background }}>{children}</View>
+      </StyledThemeProvider>
     </ThemeContext.Provider>
   );
 }

@@ -1,11 +1,37 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { styled } from "styled-components/native";
 
 import { KmUpdateModal } from "@/components/features/KmUpdateModal";
 import { Card } from "@/components/ui/Card";
+import { AppText, Column, Row, Screen, ScreenContent, Title } from "@/components/ui/styled";
 import { useVehicleStore } from "@/store/vehicleStore";
+
+const CompactScreen = styled.ScrollView.attrs(({ theme }) => ({
+  contentContainerStyle: { gap: 16, padding: 20 },
+  style: { backgroundColor: theme.background },
+}))``;
+
+const ActionButton = styled.Pressable<{ $primary?: boolean; $flex?: number }>`
+  min-height: 48px;
+  ${({ $flex }) => ($flex !== undefined ? `flex: ${$flex};` : "")}
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  border-width: ${({ $primary }) => ($primary ? 0 : 1)}px;
+  border-color: ${({ theme }) => theme.border};
+  background-color: ${({ $primary, theme }) => ($primary ? theme.primary : "transparent")};
+  padding: 0 16px;
+`;
+
+const HistoryRow = styled(Row)`
+  border-top-width: 1px;
+  border-top-color: ${({ theme }) => theme.border};
+  padding: 12px 0;
+`;
 
 export default function VehicleDetailsScreen() {
   const router = useRouter();
@@ -40,25 +66,33 @@ export default function VehicleDetailsScreen() {
 
   if (!isHydrated) {
     return (
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="p-5">
-        <Text className="text-lg font-semibold text-text">Carregando veículo...</Text>
-      </ScrollView>
+      <ScreenContent>
+        <CompactScreen>
+          <AppText $size={18} $weight={600}>
+            Carregando veículo...
+          </AppText>
+        </CompactScreen>
+      </ScreenContent>
     );
   }
 
   if (!vehicle) {
     return (
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5">
-        <Text className="text-lg font-semibold text-text">Veículo não encontrado.</Text>
-        <Pressable
+      <CompactScreen>
+        <AppText $size={18} $weight={600}>
+          Veículo não encontrado.
+        </AppText>
+        <ActionButton
           accessibilityRole="button"
-          className="min-h-12 flex-row items-center justify-center gap-2 rounded-lg bg-primary px-4 active:opacity-80"
           onPress={() => router.push("/(tabs)/vehicles")}
+          $primary
         >
           <Ionicons name="car-sport-outline" size={18} color="white" />
-          <Text className="font-jakarta text-sm font-bold text-white">Ver frota</Text>
-        </Pressable>
-      </ScrollView>
+          <AppText $color="white" $weight={700}>
+            Ver frota
+          </AppText>
+        </ActionButton>
+      </CompactScreen>
     );
   }
 
@@ -73,87 +107,85 @@ export default function VehicleDetailsScreen() {
 
   return (
     <>
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5">
-        <View className="gap-1">
-          <Text className="text-3xl font-bold text-text">{vehicle.nickname}</Text>
-          <Text className="text-sm text-muted">Detalhes salvos localmente neste dispositivo.</Text>
-        </View>
+      <Screen>
+        <Column $gap={4}>
+          <Title>{vehicle.nickname}</Title>
+          <AppText $color="muted">Detalhes salvos localmente neste dispositivo.</AppText>
+        </Column>
 
-        <Card className="gap-4 p-4">
-          <View className="gap-1">
-            <Text className="text-sm font-semibold text-text">Marca / Modelo / Ano</Text>
-            <Text className="text-base text-text">{description}</Text>
-          </View>
+        <Card $gap={16}>
+          <Column $gap={4}>
+            <AppText $weight={600}>Marca / Modelo / Ano</AppText>
+            <AppText $size={16}>{description}</AppText>
+          </Column>
 
-          <View className="gap-1">
-            <Text className="text-sm font-semibold text-text">Placa</Text>
-            <Text className="text-base text-text">{vehicle.plate}</Text>
-          </View>
+          <Column $gap={4}>
+            <AppText $weight={600}>Placa</AppText>
+            <AppText $size={16}>{vehicle.plate}</AppText>
+          </Column>
 
-          <View className="gap-1">
-            <Text className="text-sm font-semibold text-text">Km atual</Text>
-            <Text className="text-base text-text">
-              {vehicle.currentKm.toLocaleString("pt-BR")} km
-            </Text>
-          </View>
+          <Column $gap={4}>
+            <AppText $weight={600}>Km atual</AppText>
+            <AppText $size={16}>{vehicle.currentKm.toLocaleString("pt-BR")} km</AppText>
+          </Column>
         </Card>
 
-        <Pressable
+        <ActionButton
           accessibilityRole="button"
-          className="min-h-12 flex-row items-center justify-center gap-2 rounded-lg bg-primary px-4 active:opacity-80"
           onPress={() => {
             setIsKmModalOpen(true);
           }}
+          $primary
         >
           <Ionicons name="speedometer-outline" size={18} color="white" />
-          <Text className="font-jakarta text-sm font-bold text-white">Atualizar km</Text>
-        </Pressable>
+          <AppText $color="white" $weight={700}>
+            Atualizar km
+          </AppText>
+        </ActionButton>
 
-        <Card className="gap-3 p-4">
-          <View className="gap-1">
-            <Text className="text-sm font-semibold text-text">Histórico de km</Text>
-            <Text className="text-sm text-muted">Registros mantidos localmente com data.</Text>
-          </View>
+        <Card $gap={12}>
+          <Column $gap={4}>
+            <AppText $weight={600}>Histórico de km</AppText>
+            <AppText $color="muted">Registros mantidos localmente com data.</AppText>
+          </Column>
 
           {kmRecords.length === 0 ? (
-            <Text className="text-sm text-muted">Nenhuma km registrada.</Text>
+            <AppText $color="muted">Nenhuma km registrada.</AppText>
           ) : (
             kmRecords.map((record) => (
-              <View
-                key={record.id}
-                className="flex-row items-center justify-between border-t border-border py-3"
-              >
-                <Text className="font-jakarta text-sm text-text">
-                  {record.km.toLocaleString("pt-BR")} km
-                </Text>
-                <Text className="font-jakarta text-xs text-muted">
+              <HistoryRow key={record.id} $justify="space-between">
+                <AppText>{record.km.toLocaleString("pt-BR")} km</AppText>
+                <AppText $color="muted" $size={12}>
                   {new Date(record.recordedAt).toLocaleDateString("pt-BR")}
-                </Text>
-              </View>
+                </AppText>
+              </HistoryRow>
             ))
           )}
         </Card>
 
-        <View className="flex-row gap-3">
-          <Pressable
+        <Row $gap={12}>
+          <ActionButton
             accessibilityRole="button"
-            className="min-h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-primary px-4 active:opacity-80"
             onPress={() => router.push("/(tabs)/vehicles")}
+            $primary
+            $flex={1}
           >
             <Ionicons name="car-sport-outline" size={18} color="white" />
-            <Text className="font-jakarta text-sm font-bold text-white">Ver frota</Text>
-          </Pressable>
+            <AppText $color="white" $weight={700}>
+              Ver frota
+            </AppText>
+          </ActionButton>
 
-          <Pressable
+          <ActionButton
             accessibilityRole="button"
-            className="min-h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-border px-4 active:opacity-80"
             onPress={() => router.push("/(tabs)/history")}
+            $flex={1}
           >
             <Ionicons name="time-outline" size={18} color="#757575" />
-            <Text className="font-jakarta text-sm font-bold text-text">Histórico</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+            <AppText $weight={700}>Histórico</AppText>
+          </ActionButton>
+        </Row>
+      </Screen>
       <KmUpdateModal
         visible={isKmModalOpen}
         vehicle={vehicle}

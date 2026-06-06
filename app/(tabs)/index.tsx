@@ -1,14 +1,42 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, View, Pressable } from "react-native";
+import { Alert, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { styled } from "styled-components/native";
 
 import { KmUpdateModal } from "@/components/features/KmUpdateModal";
 import { Card } from "@/components/ui/Card";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { AppText, Bullet, Column, Row, Screen, SectionTitle, Title } from "@/components/ui/styled";
 import { useVehicleStore } from "@/store/vehicleStore";
 import { useAppTheme } from "@/components/ThemeProvider";
 import type { KmPromptFrequency } from "@/lib/kmReminder";
+
+const SummaryCard = styled(Card)`
+  flex: 1;
+  min-height: 120px;
+`;
+
+const FrequencyButton = styled.Pressable<{ $selected: boolean }>`
+  min-height: 40px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border-width: 1px;
+  padding: 0 12px;
+  background-color: ${({ $selected, theme }) => ($selected ? theme.primary : "transparent")};
+  border-color: ${({ $selected, theme }) => ($selected ? theme.primary : theme.border)};
+`;
+
+const AlertHeader = styled(Row)<{ $active: boolean }>`
+  background-color: ${({ $active, theme }) => ($active ? theme.primary : theme.muted)};
+  padding: 12px 16px;
+`;
+
+const AlertBody = styled(Column)`
+  padding: 12px;
+`;
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -81,160 +109,149 @@ export default function DashboardScreen() {
 
   return (
     <>
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-5 p-5 pb-32">
-        {/* Header com Toggle */}
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="font-jakarta text-3xl font-bold text-text">Dashboard</Text>
-            <Text className="font-jakarta mt-1 text-base text-muted">
+      <Screen>
+        <Row $align="center" $justify="space-between">
+          <Column $gap={4}>
+            <Title>Dashboard</Title>
+            <AppText $color="muted" $size={16}>
               Resumo local dos seus veículos.
-            </Text>
-          </View>
+            </AppText>
+          </Column>
           <ThemeToggle />
-        </View>
+        </Row>
 
-        <View className="gap-4">
-          <Text className="font-jakarta text-xl font-bold text-text">Resumo rápido</Text>
-          <View className="flex-row gap-4">
-            <Card className="flex-1 p-4" style={{ minHeight: 120 }}>
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
+        <Column $gap={16}>
+          <SectionTitle>Resumo rápido</SectionTitle>
+          <Row $gap={16}>
+            <SummaryCard>
+              <Column $gap={8} $flex={1}>
+                <Row $gap={8}>
                   <Ionicons name="car-outline" size={18} color={isDark ? "#B0BEC5" : "#757575"} />
-                  <Text className="font-jakarta text-xs font-medium text-muted">
+                  <AppText $color="muted" $size={12} $weight={500}>
                     Veículos cadastrados
-                  </Text>
-                </View>
-              </View>
-              <Text className="font-jakarta mt-2 text-4xl font-bold text-text">
-                {isHydrated ? vehicles.length : "-"}
-              </Text>
-              <Text className="font-jakarta mt-auto text-[11px] text-muted">
-                Frota registrada localmente
-              </Text>
-            </Card>
+                  </AppText>
+                </Row>
+                <AppText $size={36} $weight={700}>
+                  {isHydrated ? vehicles.length : "-"}
+                </AppText>
+                <AppText $color="muted" $size={11}>
+                  Frota registrada localmente
+                </AppText>
+              </Column>
+            </SummaryCard>
 
-            <Card className="flex-1 p-4" style={{ minHeight: 120 }}>
-              <View className="flex-row items-center gap-2">
-                <Ionicons
-                  name="speedometer-outline"
-                  size={18}
-                  color={isDark ? "#B0BEC5" : "#757575"}
-                />
-                <Text className="font-jakarta text-xs font-medium text-muted">Km total:</Text>
-              </View>
-              <Text className="font-jakarta mt-2 text-3xl font-bold text-text">
-                {isHydrated ? totalKm.toLocaleString("pt-BR") : "-"}
-              </Text>
-              <View className="mt-auto flex-row items-center gap-1">
-                <Text className="font-jakarta text-[11px] text-muted">Soma da frota local</Text>
-              </View>
-            </Card>
-          </View>
-        </View>
+            <SummaryCard>
+              <Column $gap={8} $flex={1}>
+                <Row $gap={8}>
+                  <Ionicons
+                    name="speedometer-outline"
+                    size={18}
+                    color={isDark ? "#B0BEC5" : "#757575"}
+                  />
+                  <AppText $color="muted" $size={12} $weight={500}>
+                    Km total:
+                  </AppText>
+                </Row>
+                <AppText $size={30} $weight={700}>
+                  {isHydrated ? totalKm.toLocaleString("pt-BR") : "-"}
+                </AppText>
+                <AppText $color="muted" $size={11}>
+                  Soma da frota local
+                </AppText>
+              </Column>
+            </SummaryCard>
+          </Row>
+        </Column>
 
-        <View className="gap-3">
-          <Text className="font-jakarta text-xl font-bold text-text">Atualização de km</Text>
-          <Card className="gap-3 p-4">
-            <View className="gap-1">
-              <Text className="font-jakarta text-sm font-bold text-text">Solicitar ao abrir</Text>
-              <Text className="font-jakarta text-sm text-muted">
+        <Column $gap={12}>
+          <SectionTitle>Atualização de km</SectionTitle>
+          <Card $gap={12}>
+            <Column $gap={4}>
+              <AppText $weight={700}>Solicitar ao abrir</AppText>
+              <AppText $color="muted">
                 Frequência usada para lembrar a atualização da km atual dos veículos.
-              </Text>
-            </View>
-            <View className="flex-row gap-2">
+              </AppText>
+            </Column>
+            <Row $gap={8}>
               {(["daily", "weekly"] as const).map((frequency) => {
                 const isSelected = kmPromptFrequency === frequency;
                 return (
-                  <Pressable
+                  <FrequencyButton
                     key={frequency}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
-                    className="min-h-10 flex-1 items-center justify-center rounded-lg border px-3"
                     onPress={() => {
                       void handleFrequencyChange(frequency);
                     }}
-                    style={{
-                      backgroundColor: isSelected
-                        ? isDark
-                          ? "#2196F3"
-                          : "#E53935"
-                        : "transparent",
-                      borderColor: isSelected ? (isDark ? "#2196F3" : "#E53935") : "#DADDE1",
-                    }}
+                    $selected={isSelected}
                   >
-                    <Text
-                      className="font-jakarta text-sm font-bold"
-                      style={{ color: isSelected ? "#FFFFFF" : isDark ? "#FFFFFF" : "#1F2933" }}
-                    >
+                    <AppText $color={isSelected ? "white" : "text"} $weight={700}>
                       {frequency === "daily" ? "Diário" : "Semanal"}
-                    </Text>
-                  </Pressable>
+                    </AppText>
+                  </FrequencyButton>
                 );
               })}
-            </View>
+            </Row>
           </Card>
-        </View>
+        </Column>
 
-        <View className="gap-4">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-jakarta text-xl font-bold text-text">Próxima revisão</Text>
+        <Column $gap={16}>
+          <Row $justify="space-between">
+            <SectionTitle>Próxima revisão</SectionTitle>
             <Pressable onPress={() => router.push("/(tabs)/vehicles")}>
-              <Text className="text-sm font-bold text-accent font-jakarta">Ver veículos</Text>
+              <AppText $color="accent" $weight={700}>
+                Ver veículos
+              </AppText>
             </Pressable>
-          </View>
-          <Card className="p-0 overflow-hidden">
-            <View
-              className="flex-row items-center gap-2 px-4 py-3"
-              style={{
-                backgroundColor: hasVehicles ? (isDark ? "#2196F3" : "#E53935") : "#757575",
-              }}
-            >
+          </Row>
+          <Card padded={false} style={{ overflow: "hidden" }}>
+            <AlertHeader $active={hasVehicles} $gap={8}>
               <Ionicons
                 name={hasVehicles ? (isDark ? "construct" : "alert-circle") : "information-circle"}
                 size={20}
                 color="white"
               />
-              <Text className="font-jakarta text-sm font-bold text-white uppercase tracking-wider">
+              <AppText $color="white" $weight={700} $uppercase>
                 {hasVehicles ? "Acompanhamento local" : "Nenhum veículo cadastrado"}
-              </Text>
-            </View>
+              </AppText>
+            </AlertHeader>
 
-            <View className="p-3 gap-2">
-              <Text className="font-jakarta text-sm font-bold text-text leading-relaxed">
+            <AlertBody $gap={8}>
+              <AppText $weight={700} $lineHeight={20}>
                 {hasVehicles
                   ? "Nenhuma revisão pendente foi registrada para a frota atual."
                   : "Cadastre um veículo para acompanhar quilometragem e revisões."}
-              </Text>
+              </AppText>
 
-              <View className="gap-1.5">
-                <View className="flex-row items-center gap-2">
-                  <View className="h-1.5 w-1.5 rounded-full bg-muted" />
-                  <Text className="font-jakarta text-sm text-text">
-                    <Text className="font-bold">Frota:</Text>{" "}
+              <Column $gap={6}>
+                <Row $gap={8}>
+                  <Bullet />
+                  <AppText>
+                    <AppText $weight={700}>Frota:</AppText>{" "}
                     {isHydrated ? `${vehicles.length} veículo(s)` : "Carregando..."}
-                  </Text>
-                </View>
-                <View className="flex-row items-center gap-2">
-                  <View className="h-1.5 w-1.5 rounded-full bg-muted" />
-                  <Text className="font-jakarta text-sm text-text">
-                    <Text className="font-bold">Km total:</Text>{" "}
+                  </AppText>
+                </Row>
+                <Row $gap={8}>
+                  <Bullet />
+                  <AppText>
+                    <AppText $weight={700}>Km total:</AppText>{" "}
                     {isHydrated ? `${totalKm.toLocaleString("pt-BR")} km` : "Carregando..."}
-                  </Text>
-                </View>
-                <View className="flex-row items-center gap-2">
-                  <View className="h-1.5 w-1.5 rounded-full bg-muted" />
-                  <Text className="font-jakarta text-sm text-text">
-                    <Text className="font-bold">Ação recomendada:</Text>{" "}
+                  </AppText>
+                </Row>
+                <Row $gap={8}>
+                  <Bullet />
+                  <AppText>
+                    <AppText $weight={700}>Ação recomendada:</AppText>{" "}
                     {hasVehicles
                       ? "Revise os veículos cadastrados."
                       : "Adicione o primeiro veículo."}
-                  </Text>
-                </View>
-              </View>
-            </View>
+                  </AppText>
+                </Row>
+              </Column>
+            </AlertBody>
           </Card>
-        </View>
-      </ScrollView>
+        </Column>
+      </Screen>
       <KmUpdateModal
         visible={Boolean(promptVehicle)}
         vehicle={promptVehicle}

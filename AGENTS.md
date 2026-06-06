@@ -2,7 +2,7 @@
 
 Checkup Car is a React Native mobile application for offline-first vehicle maintenance tracking. Users manage vehicles, mileage, maintenance events, reminders, and execution history using local device storage as the primary data source.
 
-The project is a mobile monolith built with Expo, TypeScript, Expo Router, NativeWind, Zustand, expo-sqlite, and Drizzle ORM. The application must remain reliable without network access. Online integrations, such as Google authentication or future sync, are convenience layers and must not break core local workflows.
+The project is a mobile monolith built with Expo, TypeScript, Expo Router, styled-components, Zustand, expo-sqlite, and Drizzle ORM. The application must remain reliable without network access. Online integrations, such as Google authentication or future sync, are convenience layers and must not break core local workflows.
 
 # AGENT ROLE & PERSONA
 
@@ -93,7 +93,7 @@ Use this structure as the source of truth for where code belongs:
   - `package.json`: scripts, dependencies, lint-staged.
   - `tsconfig.json`: strict TypeScript and import alias.
   - `eslint.config.js`: linting rules.
-  - `tailwind.config.js` and `global.css`: NativeWind styling.
+  - `styled.d.ts` and `components/ui/styled.ts`: styled-components theme typing and shared UI primitives.
   - `drizzle.config.ts`: Drizzle migration configuration.
   - `app.json` and `eas.json`: Expo/EAS configuration.
 
@@ -110,7 +110,7 @@ Use this structure as the source of truth for where code belongs:
 - Use `async/await` for asynchronous work.
 - Keep React components declarative and readable.
 - Use Zustand selectors to avoid unnecessary component re-renders.
-- Use NativeWind classes for layout and styling unless a dynamic value requires inline styles.
+- Use styled-components for layout and styling unless a small dynamic platform value requires inline styles.
 - Keep UI text in Portuguese when it is user-facing, matching the existing product language.
 - Keep code comments rare and useful. Add comments only for non-obvious decisions or platform constraints.
 - Use `toLocaleString("pt-BR")` for mileage and localized numeric display where appropriate.

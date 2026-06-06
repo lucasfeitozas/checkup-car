@@ -1,16 +1,93 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal } from "react-native";
+import { styled } from "styled-components/native";
 
 import { VehicleCard } from "@/components/features/VehicleCard";
 import { useAppTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/Button";
+import { AppText, Column, Screen, SectionTitle, Surface } from "@/components/ui/styled";
 import { MAX_VEHICLES_PER_USER, useVehicleStore } from "@/store/vehicleStore";
 import { formatPlate, normalizePlate, validateNewVehicleInput } from "@/lib/vehicleValidation";
 
 function formatPlateInput(value: string): string {
   return formatPlate(normalizePlate(value).slice(0, 7));
 }
+
+const Actions = styled(Column)`
+  gap: 8px;
+`;
+
+const ModalOverlay = styled.View`
+  flex: 1;
+  justify-content: flex-end;
+  background-color: rgba(0, 0, 0, 0.4);
+`;
+
+const Backdrop = styled.Pressable`
+  position: absolute;
+  inset: 0;
+`;
+
+const Sheet = styled.View`
+  height: 92%;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 20px;
+  background-color: ${({ theme }) => theme.background};
+`;
+
+const SheetHeader = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const CloseButton = styled.Pressable`
+  border-radius: 8px;
+  border-width: 1px;
+  border-color: ${({ theme }) => theme.border};
+  padding: 8px 12px;
+`;
+
+const FormScroll = styled.ScrollView.attrs({
+  contentContainerStyle: { gap: 12, paddingBottom: 16 },
+  keyboardShouldPersistTaps: "handled" as const,
+})`
+  flex: 1;
+  margin-top: 16px;
+`;
+
+const Field = styled(Column)`
+  gap: 8px;
+`;
+
+const FieldInput = styled.TextInput<{ $hasError: boolean }>`
+  min-height: 48px;
+  border-radius: 8px;
+  border-width: 1px;
+  padding: 0 16px;
+  background-color: ${({ theme }) => theme.background};
+  border-color: ${({ $hasError, theme }) => ($hasError ? theme.primary : theme.border)};
+  color: ${({ theme }) => theme.text};
+`;
+
+const Footer = styled.View`
+  border-top-width: 1px;
+  border-top-color: ${({ theme }) => theme.border};
+  padding-top: 12px;
+  background-color: ${({ theme }) => theme.background};
+`;
+
+const SubmitButton = styled.Pressable<{ disabled?: boolean }>`
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 0 20px;
+  background-color: ${({ theme }) => theme.primary};
+  opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
+`;
 
 export default function VehiclesScreen() {
   const router = useRouter();
@@ -61,18 +138,6 @@ export default function VehiclesScreen() {
     return validationErrors.find((error) => error.field === field)?.message;
   }
 
-  function inputClassName(): string {
-    return "min-h-12 rounded-lg border px-4";
-  }
-
-  function inputStyle(hasError: boolean) {
-    return {
-      backgroundColor: theme.background,
-      borderColor: hasError ? theme.primary : theme.border,
-      color: theme.text,
-    };
-  }
-
   function shouldShowFieldError(field: string, value: string): boolean {
     const error = getFieldError(field);
     return Boolean(error && (value.trim().length > 0 || firstValidationError?.field === field));
@@ -119,13 +184,15 @@ export default function VehiclesScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5 pb-32">
-      <View>
-        <Text className="font-jakarta text-2xl font-bold text-text">Veículos</Text>
-        <Text className="font-jakarta mt-1 text-base text-muted">Gerencie sua frota.</Text>
-      </View>
+    <Screen>
+      <Column $gap={4}>
+        <SectionTitle>Veículos</SectionTitle>
+        <AppText $color="muted" $size={16}>
+          Gerencie sua frota.
+        </AppText>
+      </Column>
 
-      <View className="gap-2">
+      <Actions>
         <Button
           title={isLimitReached ? "Limite atingido" : "Adicionar veículo"}
           onPress={() => {
@@ -135,28 +202,26 @@ export default function VehiclesScreen() {
           disabled={isLimitReached}
         />
         {isLimitReached ? (
-          <Text className="font-jakarta text-sm font-semibold text-muted">
+          <AppText $color="muted" $weight={600}>
             Você já cadastrou {MAX_VEHICLES_PER_USER} veículos nesta conta.
-          </Text>
+          </AppText>
         ) : null}
         {successMessage ? (
-          <Text className="font-jakarta text-sm font-semibold text-green-600">
+          <AppText $color="success" $weight={600}>
             {successMessage}
-          </Text>
+          </AppText>
         ) : null}
-      </View>
+      </Actions>
 
       {!isHydrated ? (
-        <Text className="font-jakarta text-sm text-muted">Carregando veículos...</Text>
+        <AppText $color="muted">Carregando veículos...</AppText>
       ) : vehicles.length === 0 ? (
-        <View className="rounded-xl border border-border bg-surface p-4">
-          <Text className="font-jakarta text-base font-bold text-text">
+        <Surface>
+          <AppText $size={16} $weight={700}>
             Nenhum veículo cadastrado
-          </Text>
-          <Text className="font-jakarta mt-1 text-sm text-muted">
-            Adicione seu primeiro veículo para começar.
-          </Text>
-        </View>
+          </AppText>
+          <AppText $color="muted">Adicione seu primeiro veículo para começar.</AppText>
+        </Surface>
       ) : (
         vehicles.map((vehicle) => (
           <VehicleCard
@@ -177,37 +242,32 @@ export default function VehiclesScreen() {
           setIsCreateOpen(false);
         }}
       >
-        <View className="flex-1 justify-end bg-black/40">
-          <Pressable
-            className="absolute inset-0"
+        <ModalOverlay>
+          <Backdrop
             onPress={() => {
               setIsCreateOpen(false);
             }}
           />
-          <View className="rounded-t-3xl p-5" style={{ backgroundColor: theme.background, height: "92%" }}>
-            <View className="flex-row items-center justify-between">
-              <Text className="font-jakarta text-lg font-bold text-text">Cadastrar veículo</Text>
-              <Pressable
+          <Sheet>
+            <SheetHeader>
+              <AppText $size={18} $weight={700}>
+                Cadastrar veículo
+              </AppText>
+              <CloseButton
                 onPress={() => {
                   setIsCreateOpen(false);
                 }}
-                className="rounded-lg border px-3 py-2"
                 accessibilityLabel="Fechar cadastro de veículo"
                 accessibilityRole="button"
-                style={{ borderColor: theme.border }}
               >
-                <Text className="font-jakarta text-sm font-bold text-text">Fechar</Text>
-              </Pressable>
-            </View>
+                <AppText $weight={700}>Fechar</AppText>
+              </CloseButton>
+            </SheetHeader>
 
-            <ScrollView
-              className="mt-4 flex-1"
-              contentContainerClassName="gap-3 pb-4"
-              keyboardShouldPersistTaps="handled"
-            >
-              <View className="gap-2">
-                <Text className="font-jakarta text-sm font-semibold text-text">Placa</Text>
-                <TextInput
+            <FormScroll>
+              <Field>
+                <AppText $weight={600}>Placa</AppText>
+                <FieldInput
                   value={plate}
                   onChangeText={(v) => {
                     setPlate(formatPlateInput(v));
@@ -220,22 +280,18 @@ export default function VehiclesScreen() {
                   maxLength={8}
                   placeholder="AAA-0000 ou AAA0A00"
                   placeholderTextColor={theme.muted}
-                  className={inputClassName()}
-                  style={inputStyle(shouldShowFieldError("plate", plate))}
+                  $hasError={shouldShowFieldError("plate", plate)}
                 />
                 {shouldShowFieldError("plate", plate) ? (
-                  <Text
-                    className="font-jakarta text-xs font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <AppText $color="primary" $size={12} $weight={600}>
                     {getFieldError("plate")}
-                  </Text>
+                  </AppText>
                 ) : null}
-              </View>
+              </Field>
 
-              <View className="gap-2">
-                <Text className="font-jakarta text-sm font-semibold text-text">Nome/apelido</Text>
-                <TextInput
+              <Field>
+                <AppText $weight={600}>Nome/apelido</AppText>
+                <FieldInput
                   value={nickname}
                   onChangeText={(v) => {
                     setNickname(v);
@@ -245,24 +301,18 @@ export default function VehiclesScreen() {
                   maxLength={50}
                   placeholder="Ex: Meu carro"
                   placeholderTextColor={theme.muted}
-                  className={inputClassName()}
-                  style={inputStyle(shouldShowFieldError("nickname", nickname))}
+                  $hasError={shouldShowFieldError("nickname", nickname)}
                 />
                 {shouldShowFieldError("nickname", nickname) ? (
-                  <Text
-                    className="font-jakarta text-xs font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <AppText $color="primary" $size={12} $weight={600}>
                     {getFieldError("nickname")}
-                  </Text>
+                  </AppText>
                 ) : null}
-              </View>
+              </Field>
 
-              <View className="gap-2">
-                <Text className="font-jakarta text-sm font-semibold text-text">
-                  Marca (opcional)
-                </Text>
-                <TextInput
+              <Field>
+                <AppText $weight={600}>Marca (opcional)</AppText>
+                <FieldInput
                   value={brand}
                   onChangeText={(v) => {
                     setBrand(v);
@@ -272,22 +322,18 @@ export default function VehiclesScreen() {
                   maxLength={100}
                   placeholder="Ex: Toyota"
                   placeholderTextColor={theme.muted}
-                  className={inputClassName()}
-                  style={inputStyle(shouldShowFieldError("brand", brand))}
+                  $hasError={shouldShowFieldError("brand", brand)}
                 />
                 {shouldShowFieldError("brand", brand) ? (
-                  <Text
-                    className="font-jakarta text-xs font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <AppText $color="primary" $size={12} $weight={600}>
                     {getFieldError("brand")}
-                  </Text>
+                  </AppText>
                 ) : null}
-              </View>
+              </Field>
 
-              <View className="gap-2">
-                <Text className="font-jakarta text-sm font-semibold text-text">Modelo</Text>
-                <TextInput
+              <Field>
+                <AppText $weight={600}>Modelo</AppText>
+                <FieldInput
                   value={model}
                   onChangeText={(v) => {
                     setModel(v);
@@ -297,22 +343,18 @@ export default function VehiclesScreen() {
                   maxLength={100}
                   placeholder="Ex: Corolla"
                   placeholderTextColor={theme.muted}
-                  className={inputClassName()}
-                  style={inputStyle(shouldShowFieldError("model", model))}
+                  $hasError={shouldShowFieldError("model", model)}
                 />
                 {shouldShowFieldError("model", model) ? (
-                  <Text
-                    className="font-jakarta text-xs font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <AppText $color="primary" $size={12} $weight={600}>
                     {getFieldError("model")}
-                  </Text>
+                  </AppText>
                 ) : null}
-              </View>
+              </Field>
 
-              <View className="gap-2">
-                <Text className="font-jakarta text-sm font-semibold text-text">Ano</Text>
-                <TextInput
+              <Field>
+                <AppText $weight={600}>Ano</AppText>
+                <FieldInput
                   value={year}
                   onChangeText={(v) => {
                     setYear(v.replace(/\D/g, "").slice(0, 4));
@@ -324,22 +366,18 @@ export default function VehiclesScreen() {
                   maxLength={4}
                   placeholder="Ex: 2022"
                   placeholderTextColor={theme.muted}
-                  className={inputClassName()}
-                  style={inputStyle(shouldShowFieldError("year", year))}
+                  $hasError={shouldShowFieldError("year", year)}
                 />
                 {shouldShowFieldError("year", year) ? (
-                  <Text
-                    className="font-jakarta text-xs font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <AppText $color="primary" $size={12} $weight={600}>
                     {getFieldError("year")}
-                  </Text>
+                  </AppText>
                 ) : null}
-              </View>
+              </Field>
 
-              <View className="gap-2">
-                <Text className="font-jakarta text-sm font-semibold text-text">Km atual</Text>
-                <TextInput
+              <Field>
+                <AppText $weight={600}>Km atual</AppText>
+                <FieldInput
                   value={currentKm}
                   onChangeText={(v) => {
                     setCurrentKm(v.replace(/\D/g, "").slice(0, 9));
@@ -351,52 +389,36 @@ export default function VehiclesScreen() {
                   maxLength={9}
                   placeholder="Ex: 42000"
                   placeholderTextColor={theme.muted}
-                  className={inputClassName()}
-                  style={inputStyle(shouldShowFieldError("currentKm", currentKm))}
+                  $hasError={shouldShowFieldError("currentKm", currentKm)}
                 />
                 {shouldShowFieldError("currentKm", currentKm) ? (
-                  <Text
-                    className="font-jakarta text-xs font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <AppText $color="primary" $size={12} $weight={600}>
                     {getFieldError("currentKm")}
-                  </Text>
+                  </AppText>
                 ) : null}
-              </View>
+              </Field>
+            </FormScroll>
 
-            </ScrollView>
-
-            <View
-              className="border-t pt-3"
-              style={{ backgroundColor: theme.background, borderTopColor: theme.border }}
-            >
+            <Footer>
               {firstValidationError ? (
-                <Text
-                  className="font-jakarta mb-2 text-sm font-semibold"
-                  style={{ color: theme.primary }}
-                >
+                <AppText $color="primary" $weight={600} style={{ marginBottom: 8 }}>
                   {firstValidationError.message}
-                </Text>
+                </AppText>
               ) : null}
-              <Pressable
+              <SubmitButton
                 accessibilityRole="button"
                 accessibilityState={{ disabled: isSubmitDisabled }}
-                className="min-h-12 items-center justify-center rounded-lg px-5"
                 disabled={isSubmitDisabled}
                 onPress={handleCreateVehicle}
-                style={{
-                  backgroundColor: theme.primary,
-                  opacity: isSubmitDisabled ? 0.5 : 1,
-                }}
               >
-                <Text className="font-jakarta text-base font-bold" style={{ color: "#FFFFFF" }}>
+                <AppText $color="white" $size={16} $weight={700}>
                   Cadastrar
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
+                </AppText>
+              </SubmitButton>
+            </Footer>
+          </Sheet>
+        </ModalOverlay>
       </Modal>
-    </ScrollView>
+    </Screen>
   );
 }
