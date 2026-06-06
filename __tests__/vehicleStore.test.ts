@@ -25,7 +25,13 @@ describe("vehicleStore", () => {
       accessToken: null,
       isHydrated: true,
     });
-    useVehicleStore.setState({ vehicles: [], isHydrated: false });
+    useVehicleStore.setState({
+      vehicles: [],
+      kmRecords: [],
+      kmPromptFrequency: "daily",
+      lastKmPromptAtByVehicleId: {},
+      isHydrated: false,
+    });
     secureStoreMock.setItemAsync.mockResolvedValue();
   });
 
@@ -58,6 +64,48 @@ describe("vehicleStore", () => {
     await useVehicleStore.getState().hydrate();
 
     expect(useVehicleStore.getState().vehicles).toEqual(stored);
+    expect(useVehicleStore.getState().kmRecords).toEqual([
+      {
+        id: "km-v-1-initial",
+        vehicleId: "v-1",
+        km: 1000,
+        recordedAt: "1970-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("hydrates persisted vehicle state with km records and prompt settings", async () => {
+    const key = "checkup-car.vehicles.user-1";
+    const stored = {
+      vehicles: [
+        {
+          id: "v-1",
+          nickname: "Carro A",
+          brand: "Honda",
+          model: "Civic",
+          year: 2021,
+          plate: "ABC-1234",
+          currentKm: 1200,
+        },
+      ],
+      kmRecords: [
+        {
+          id: "km-1",
+          vehicleId: "v-1",
+          km: 1200,
+          recordedAt: "2026-06-01T10:00:00.000Z",
+        },
+      ],
+      kmPromptFrequency: "weekly",
+      lastKmPromptAtByVehicleId: { "v-1": "2026-06-01T10:00:00.000Z" },
+    };
+    secureStoreMock.getItemAsync.mockImplementation(async (k) =>
+      k === key ? JSON.stringify(stored) : null,
+    );
+
+    await useVehicleStore.getState().hydrate();
+
+    expect(useVehicleStore.getState()).toMatchObject(stored);
   });
 
   it("blocks duplicate plate (case/format insensitive)", async () => {
@@ -87,11 +135,70 @@ describe("vehicleStore", () => {
 
     expect(secureStoreMock.setItemAsync).toHaveBeenCalledWith(key, expect.any(String));
 
-    await useVehicleStore.getState().updateKm(vehicle.id, 999);
+    await useVehicleStore.getState().updateKm(vehicle.id, 43000);
     const updated = useVehicleStore.getState().vehicles.find((v) => v.id === vehicle.id);
-    expect(updated?.currentKm).toBe(999);
+    expect(updated?.currentKm).toBe(43000);
 
     expect(secureStoreMock.setItemAsync).toHaveBeenCalledWith(key, expect.any(String));
+  });
+
+  it("creates an initial km record when adding a vehicle", async () => {
+    const created = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ currentKm: 42000 }));
+
+    expect(useVehicleStore.getState().kmRecords).toEqual([
+      expect.objectContaining({
+        vehicleId: created.id,
+        km: 42000,
+        recordedAt: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("rejects km updates lower than current km", async () => {
+    const created = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ currentKm: 42000 }));
+
+    await expect(useVehicleStore.getState().recordKm(created.id, 41999)).rejects.toThrow(
+      /maior ou igual ao último registro/i,
+    );
+    expect(useVehicleStore.getState().getVehicleById(created.id)?.currentKm).toBe(42000);
+  });
+
+  it("records km history ordered by newest date", async () => {
+    const created = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ currentKm: 42000 }));
+
+    await useVehicleStore.getState().recordKm(created.id, 43000, "2030-06-02T10:00:00.000Z");
+
+    const history = useVehicleStore.getState().getKmRecordsByVehicleId(created.id);
+    expect(history[0]).toMatchObject({
+      vehicleId: created.id,
+      km: 43000,
+      recordedAt: "2030-06-02T10:00:00.000Z",
+    });
+    expect(history[1]).toMatchObject({ vehicleId: created.id, km: 42000 });
+  });
+
+  it("returns vehicles pending km prompt according to configured frequency", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    await useVehicleStore.getState().markKmPromptShown(created.id, "2026-06-05T12:00:00.000Z");
+
+    expect(
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T11:59:00.000Z")),
+    ).toEqual([]);
+    expect(
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T12:01:00.000Z")),
+    ).toEqual([expect.objectContaining({ id: created.id })]);
+
+    await useVehicleStore.getState().setKmPromptFrequency("weekly");
+    expect(
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-07T12:01:00.000Z")),
+    ).toEqual([]);
   });
 
   it("returns the created vehicle after addVehicle", async () => {
