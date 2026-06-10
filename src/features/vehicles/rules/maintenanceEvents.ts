@@ -1,4 +1,4 @@
-export type MaintenanceEventTypeId =
+export type SystemMaintenanceEventTypeId =
   | "air-filter"
   | "oil-filter"
   | "spark-plugs"
@@ -11,6 +11,8 @@ export type MaintenanceEventTypeId =
   | "coolant"
   | "alignment-balancing"
   | "custom";
+
+export type MaintenanceEventTypeId = SystemMaintenanceEventTypeId | `custom-${string}`;
 
 export type MaintenanceEventType = {
   id: MaintenanceEventTypeId;
@@ -28,7 +30,27 @@ export type MaintenanceDateValidationResult =
   | { isValid: true; date: Date }
   | { isValid: false; message: string };
 
-const SYSTEM_MAINTENANCE_EVENT_TYPES: MaintenanceEventType[] = [
+export type CustomMaintenanceScheduleInput = {
+  intervalKm?: number;
+  intervalMonths?: number;
+  lastExecutionKm?: number;
+  lastExecutionDate?: Date;
+};
+
+export type CustomMaintenanceValidationInput = {
+  name: string;
+  intervalKm?: number;
+  intervalMonths?: number;
+  lastExecutionKm?: number;
+  lastExecutionDate?: Date;
+  currentKm: number;
+};
+
+export type CustomMaintenanceValidationResult =
+  | { isValid: true }
+  | { isValid: false; message: string };
+
+export const SYSTEM_MAINTENANCE_EVENT_TYPES: MaintenanceEventType[] = [
   { id: "alignment-balancing", name: "Alinhamento e balanceamento", intervalKm: 10000 },
   { id: "ignition-cables", name: "Cabos de ignição", intervalKm: 50000, intervalMonths: 36 },
   { id: "timing-belt", name: "Correia dentada", intervalKm: 15000 },
@@ -54,8 +76,9 @@ export const MAINTENANCE_EVENT_TYPES: MaintenanceEventType[] = [
 
 export function getMaintenanceEventType(
   typeId: MaintenanceEventTypeId,
+  customTypes: MaintenanceEventType[] = [],
 ): MaintenanceEventType | undefined {
-  return MAINTENANCE_EVENT_TYPES.find((type) => type.id === typeId);
+  return [...MAINTENANCE_EVENT_TYPES, ...customTypes].find((type) => type.id === typeId);
 }
 
 function addMonths(date: Date, months: number): Date {
@@ -91,6 +114,93 @@ export function calculateMaintenanceSchedule(
         ? addMonths(baseDate, type.intervalMonths).toISOString()
         : undefined,
   };
+}
+
+export function calculateCustomMaintenanceSchedule({
+  intervalKm,
+  intervalMonths,
+  lastExecutionKm,
+  lastExecutionDate,
+}: CustomMaintenanceScheduleInput): MaintenanceSchedule {
+  return {
+    nextKm:
+      intervalKm !== undefined && lastExecutionKm !== undefined
+        ? lastExecutionKm + intervalKm
+        : undefined,
+    nextDate:
+      intervalMonths !== undefined && lastExecutionDate !== undefined
+        ? addMonths(lastExecutionDate, intervalMonths).toISOString()
+        : undefined,
+  };
+}
+
+function isPositiveInteger(value: number | undefined): boolean {
+  return value !== undefined && Number.isInteger(value) && value > 0;
+}
+
+export function normalizeMaintenanceName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+export function normalizeMaintenanceNameForComparison(value: string): string {
+  return normalizeMaintenanceName(value).toLocaleLowerCase("pt-BR");
+}
+
+export function validateCustomMaintenanceInput({
+  name,
+  intervalKm,
+  intervalMonths,
+  lastExecutionKm,
+  lastExecutionDate,
+  currentKm,
+}: CustomMaintenanceValidationInput): CustomMaintenanceValidationResult {
+  if (!normalizeMaintenanceName(name)) {
+    return { isValid: false, message: "Informe o nome da manutenção personalizada." };
+  }
+
+  if (intervalKm !== undefined && !isPositiveInteger(intervalKm)) {
+    return {
+      isValid: false,
+      message: "Intervalo em km deve ser um número inteiro maior que zero.",
+    };
+  }
+
+  if (intervalMonths !== undefined && !isPositiveInteger(intervalMonths)) {
+    return {
+      isValid: false,
+      message: "Intervalo em meses deve ser um número inteiro maior que zero.",
+    };
+  }
+
+  if (intervalKm === undefined && intervalMonths === undefined) {
+    return { isValid: false, message: "Informe um intervalo em km, em meses ou ambos." };
+  }
+
+  if (intervalKm !== undefined) {
+    if (
+      lastExecutionKm === undefined ||
+      !Number.isInteger(lastExecutionKm) ||
+      lastExecutionKm < 0
+    ) {
+      return { isValid: false, message: "Informe uma última km válida." };
+    }
+
+    if (lastExecutionKm > currentKm) {
+      return { isValid: false, message: "Última km não pode ser maior que a km atual do veículo." };
+    }
+  }
+
+  if (intervalMonths !== undefined) {
+    if (!lastExecutionDate || Number.isNaN(lastExecutionDate.getTime())) {
+      return { isValid: false, message: "Informe a data da última execução." };
+    }
+
+    if (startOfUtcDay(lastExecutionDate).getTime() > startOfUtcDay(new Date()).getTime()) {
+      return { isValid: false, message: "Última execução não pode estar no futuro." };
+    }
+  }
+
+  return { isValid: true };
 }
 
 export function maskBrazilianDateInput(value: string): string {
@@ -154,6 +264,41 @@ export function validateBrazilianFutureDateInput(
 
   if (startOfUtcDay(parsed).getTime() < startOfUtcDay(today).getTime()) {
     return { isValid: false, message: "Data limite não pode ser anterior à data atual." };
+  }
+
+  return { isValid: true, date: parsed };
+}
+
+export function validateBrazilianPastOrTodayDateInput(
+  value: string,
+  today: Date = new Date(),
+): MaintenanceDateValidationResult {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { isValid: false, message: "Informe a data da última execução." };
+  }
+
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed);
+  if (!match) {
+    return { isValid: false, message: "Informe a data no formato DD/MM/AAAA." };
+  }
+
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+  const parsed = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return { isValid: false, message: "Informe uma data de última execução válida." };
+  }
+
+  if (startOfUtcDay(parsed).getTime() > startOfUtcDay(today).getTime()) {
+    return { isValid: false, message: "Última execução não pode estar no futuro." };
   }
 
   return { isValid: true, date: parsed };
