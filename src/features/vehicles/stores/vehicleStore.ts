@@ -3,6 +3,10 @@ import { create } from "zustand";
 import { useAuthStore } from "@/features/auth/stores/authStore";
 import type { KmPromptFrequency } from "@/features/vehicles/rules/kmReminder";
 import { shouldRequestKmUpdate } from "@/features/vehicles/rules/kmReminder";
+import {
+  getMaintenanceEventType,
+  type MaintenanceEventTypeId,
+} from "@/features/vehicles/rules/maintenanceEvents";
 import { storage } from "@/core/storage/storage";
 
 export type Vehicle = {
@@ -36,6 +40,23 @@ export type KmRecord = {
   recordedAt: string;
 };
 
+export type MaintenanceEvent = {
+  id: string;
+  vehicleId: string;
+  typeId: MaintenanceEventTypeId;
+  name: string;
+  nextKm?: number;
+  nextDate?: string;
+  createdAt: string;
+};
+
+export type NewMaintenanceEventInput = {
+  typeId: MaintenanceEventTypeId;
+  customName?: string;
+  nextKm?: number;
+  nextDate?: string;
+};
+
 export type VehicleValidationError = {
   field: "plate" | "nickname" | "brand" | "model" | "year" | "currentKm" | "limit";
   message: string;
@@ -44,11 +65,16 @@ export type VehicleValidationError = {
 export type VehicleState = {
   vehicles: Vehicle[];
   kmRecords: KmRecord[];
+  maintenanceEvents: MaintenanceEvent[];
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
   isHydrated: boolean;
   hydrate: () => Promise<void>;
   addVehicle: (vehicle: NewVehicleInput) => Promise<Vehicle>;
+  addMaintenanceEvent: (
+    vehicleId: string,
+    input: NewMaintenanceEventInput,
+  ) => Promise<MaintenanceEvent>;
   recordKm: (vehicleId: string, currentKm: number, recordedAt?: string) => Promise<KmRecord>;
   updateKm: (vehicleId: string, currentKm: number) => Promise<void>;
   setKmPromptFrequency: (frequency: KmPromptFrequency) => Promise<void>;
@@ -56,6 +82,7 @@ export type VehicleState = {
   getVehicleById: (vehicleId: string) => Vehicle | undefined;
   getVehicleList: () => VehicleListItem[];
   getKmRecordsByVehicleId: (vehicleId: string) => KmRecord[];
+  getMaintenanceEventsByVehicleId: (vehicleId: string) => MaintenanceEvent[];
   getVehiclesPendingKmPrompt: (now?: Date) => Vehicle[];
 };
 
@@ -76,6 +103,7 @@ function getVehiclesStorageKey() {
 type PersistedVehicleState = {
   vehicles: Vehicle[];
   kmRecords: KmRecord[];
+  maintenanceEvents: MaintenanceEvent[];
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
 };
@@ -86,6 +114,29 @@ function createId(prefix: string): string {
 
 function isKmPromptFrequency(value: unknown): value is KmPromptFrequency {
   return value === "daily" || value === "weekly";
+}
+
+function isMaintenanceEventTypeId(value: unknown): value is MaintenanceEventTypeId {
+  return (
+    typeof value === "string" && Boolean(getMaintenanceEventType(value as MaintenanceEventTypeId))
+  );
+}
+
+function isValidMaintenanceEvent(value: unknown): value is MaintenanceEvent {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const event = value as Partial<MaintenanceEvent>;
+  return (
+    typeof event.id === "string" &&
+    typeof event.vehicleId === "string" &&
+    isMaintenanceEventTypeId(event.typeId) &&
+    typeof event.name === "string" &&
+    typeof event.createdAt === "string" &&
+    (event.nextKm === undefined || typeof event.nextKm === "number") &&
+    (event.nextDate === undefined || typeof event.nextDate === "string")
+  );
 }
 
 function createInitialKmRecord(vehicle: Vehicle): KmRecord {
@@ -105,6 +156,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
     return {
       vehicles,
       kmRecords: vehicles.map(createInitialKmRecord),
+      maintenanceEvents: [],
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
     };
@@ -114,6 +166,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
     return {
       vehicles: [],
       kmRecords: [],
+      maintenanceEvents: [],
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
     };
@@ -124,10 +177,14 @@ function parsePersistedState(raw: string): PersistedVehicleState {
   const kmRecords = Array.isArray(state.kmRecords)
     ? state.kmRecords
     : vehicles.map(createInitialKmRecord);
+  const maintenanceEvents = Array.isArray(state.maintenanceEvents)
+    ? state.maintenanceEvents.filter(isValidMaintenanceEvent)
+    : [];
 
   return {
     vehicles,
     kmRecords,
+    maintenanceEvents,
     kmPromptFrequency: isKmPromptFrequency(state.kmPromptFrequency)
       ? state.kmPromptFrequency
       : DEFAULT_KM_PROMPT_FREQUENCY,
@@ -147,6 +204,7 @@ function buildPersistedState(state: VehicleState): PersistedVehicleState {
   return {
     vehicles: state.vehicles,
     kmRecords: state.kmRecords,
+    maintenanceEvents: state.maintenanceEvents,
     kmPromptFrequency: state.kmPromptFrequency,
     lastKmPromptAtByVehicleId: state.lastKmPromptAtByVehicleId,
   };
@@ -155,6 +213,7 @@ function buildPersistedState(state: VehicleState): PersistedVehicleState {
 export const useVehicleStore = create<VehicleState>((set, get) => ({
   vehicles: [],
   kmRecords: [],
+  maintenanceEvents: [],
   kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
   lastKmPromptAtByVehicleId: {},
   isHydrated: false,
@@ -166,6 +225,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({
         vehicles: [],
         kmRecords: [],
+        maintenanceEvents: [],
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
         isHydrated: true,
@@ -180,6 +240,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set({
         vehicles: [],
         kmRecords: [],
+        maintenanceEvents: [],
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
         isHydrated: true,
@@ -230,6 +291,56 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     }
 
     return vehicle;
+  },
+  async addMaintenanceEvent(vehicleId, input) {
+    if (!get().vehicles.some((vehicle) => vehicle.id === vehicleId)) {
+      throw new Error("Veículo não encontrado.");
+    }
+
+    const type = getMaintenanceEventType(input.typeId);
+    if (!type) {
+      throw new Error("Tipo de manutenção inválido.");
+    }
+
+    const name = input.typeId === "custom" ? input.customName?.trim() : type.name;
+    if (!name) {
+      throw new Error("Informe o nome da manutenção personalizada.");
+    }
+
+    if (input.nextKm !== undefined && (!Number.isFinite(input.nextKm) || input.nextKm < 0)) {
+      throw new Error("Próxima km deve ser um número maior ou igual a zero.");
+    }
+
+    if (input.nextDate !== undefined && Number.isNaN(Date.parse(input.nextDate))) {
+      throw new Error("Data limite inválida.");
+    }
+
+    if (input.nextKm === undefined && input.nextDate === undefined) {
+      throw new Error("Informe a próxima km ou a data limite da manutenção.");
+    }
+
+    const maintenanceEvent: MaintenanceEvent = {
+      id: createId("maintenance"),
+      vehicleId,
+      typeId: input.typeId,
+      name,
+      nextKm: input.nextKm,
+      nextDate: input.nextDate,
+      createdAt: new Date().toISOString(),
+    };
+    const previous = buildPersistedState(get());
+
+    set({ maintenanceEvents: [maintenanceEvent, ...get().maintenanceEvents] });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar manutenção.";
+      throw new Error(`Não foi possível salvar a manutenção localmente. ${message}`);
+    }
+
+    return maintenanceEvent;
   },
   async recordKm(vehicleId, currentKm, recordedAt = new Date().toISOString()) {
     const currentVehicle = get().vehicles.find((vehicle) => vehicle.id === vehicleId);
@@ -325,6 +436,11 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     return get()
       .kmRecords.filter((record) => record.vehicleId === vehicleId)
       .sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt));
+  },
+  getMaintenanceEventsByVehicleId(vehicleId) {
+    return get()
+      .maintenanceEvents.filter((event) => event.vehicleId === vehicleId)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   },
   getVehiclesPendingKmPrompt(now = new Date()) {
     const state = get();
