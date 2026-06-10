@@ -28,6 +28,7 @@ describe("vehicleStore", () => {
     useVehicleStore.setState({
       vehicles: [],
       kmRecords: [],
+      maintenanceEvents: [],
       kmPromptFrequency: "daily",
       lastKmPromptAtByVehicleId: {},
       isHydrated: false,
@@ -72,9 +73,10 @@ describe("vehicleStore", () => {
         recordedAt: "1970-01-01T00:00:00.000Z",
       },
     ]);
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
   });
 
-  it("hydrates persisted vehicle state with km records and prompt settings", async () => {
+  it("hydrates persisted vehicle state with km records, maintenance events and prompt settings", async () => {
     const key = "checkup-car.vehicles.user-1";
     const stored = {
       vehicles: [
@@ -96,6 +98,16 @@ describe("vehicleStore", () => {
           recordedAt: "2026-06-01T10:00:00.000Z",
         },
       ],
+      maintenanceEvents: [
+        {
+          id: "maintenance-1",
+          vehicleId: "v-1",
+          typeId: "spark-plugs",
+          name: "Velas de ignição",
+          nextKm: 11200,
+          createdAt: "2026-06-01T10:00:00.000Z",
+        },
+      ],
       kmPromptFrequency: "weekly",
       lastKmPromptAtByVehicleId: { "v-1": "2026-06-01T10:00:00.000Z" },
     };
@@ -106,6 +118,33 @@ describe("vehicleStore", () => {
     await useVehicleStore.getState().hydrate();
 
     expect(useVehicleStore.getState()).toMatchObject(stored);
+  });
+
+  it("hydrates persisted vehicle state without maintenance events as an empty list", async () => {
+    const key = "checkup-car.vehicles.user-1";
+    const stored = {
+      vehicles: [
+        {
+          id: "v-1",
+          nickname: "Carro A",
+          brand: "Honda",
+          model: "Civic",
+          year: 2021,
+          plate: "ABC-1234",
+          currentKm: 1200,
+        },
+      ],
+      kmRecords: [],
+      kmPromptFrequency: "weekly",
+      lastKmPromptAtByVehicleId: {},
+    };
+    secureStoreMock.getItemAsync.mockImplementation(async (k) =>
+      k === key ? JSON.stringify(stored) : null,
+    );
+
+    await useVehicleStore.getState().hydrate();
+
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
   });
 
   it("blocks duplicate plate (case/format insensitive)", async () => {
@@ -181,6 +220,76 @@ describe("vehicleStore", () => {
       recordedAt: "2030-06-02T10:00:00.000Z",
     });
     expect(history[1]).toMatchObject({ vehicleId: created.id, km: 42000 });
+  });
+
+  it("adds a predefined maintenance event", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+      nextDate: "2027-06-10T12:00:00.000Z",
+    });
+
+    expect(event).toMatchObject({
+      vehicleId: created.id,
+      typeId: "spark-plugs",
+      name: "Velas de ignição",
+      nextKm: 52000,
+      nextDate: "2027-06-10T12:00:00.000Z",
+    });
+    expect(useVehicleStore.getState().getMaintenanceEventsByVehicleId(created.id)).toEqual([event]);
+  });
+
+  it("adds a custom maintenance event", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "custom",
+      customName: "Troca de palhetas traseiras",
+      nextKm: 50000,
+    });
+
+    expect(event).toMatchObject({
+      vehicleId: created.id,
+      typeId: "custom",
+      name: "Troca de palhetas traseiras",
+      nextKm: 50000,
+      nextDate: undefined,
+    });
+  });
+
+  it("rejects maintenance events for missing vehicles", async () => {
+    await expect(
+      useVehicleStore.getState().addMaintenanceEvent("missing-vehicle", {
+        typeId: "brake-check",
+        nextKm: 57000,
+      }),
+    ).rejects.toThrow("Veículo não encontrado.");
+  });
+
+  it("rejects maintenance events without next km or due date", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    await expect(
+      useVehicleStore.getState().addMaintenanceEvent(created.id, {
+        typeId: "oil-filter",
+      }),
+    ).rejects.toThrow("Informe a próxima km ou a data limite da manutenção.");
+  });
+
+  it("rolls back maintenance event state when local persistence fails", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(
+      useVehicleStore.getState().addMaintenanceEvent(created.id, {
+        typeId: "brake-check",
+        nextKm: 57000,
+      }),
+    ).rejects.toThrow(/Não foi possível salvar a manutenção localmente/i);
+
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
   });
 
   it("returns vehicles pending km prompt according to configured frequency", async () => {
