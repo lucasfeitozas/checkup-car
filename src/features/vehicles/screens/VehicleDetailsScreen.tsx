@@ -15,6 +15,7 @@ import {
   maskBrazilianDateInput,
   type MaintenanceEventTypeId,
   validateBrazilianFutureDateInput,
+  validateBrazilianPastOrTodayDateInput,
 } from "@/features/vehicles/rules/maintenanceEvents";
 
 const CompactScreen = styled.ScrollView.attrs(({ theme }) => ({
@@ -140,6 +141,11 @@ export default function VehicleDetailsScreen() {
   const isHydrated = useVehicleStore((state) => state.isHydrated);
   const recordKm = useVehicleStore((state) => state.recordKm);
   const addMaintenanceEvent = useVehicleStore((state) => state.addMaintenanceEvent);
+  const createCustomMaintenanceEvent = useVehicleStore(
+    (state) => state.createCustomMaintenanceEvent,
+  );
+  const addCustomMaintenanceEvent = useVehicleStore((state) => state.addCustomMaintenanceEvent);
+  const customMaintenanceTypes = useVehicleStore((state) => state.customMaintenanceTypes);
   const vehicle = useVehicleStore((state) =>
     typeof id === "string" ? state.vehicles.find((item) => item.id === id) : undefined,
   );
@@ -150,6 +156,10 @@ export default function VehicleDetailsScreen() {
   const [selectedTypeId, setSelectedTypeId] =
     useState<MaintenanceEventTypeId>("alignment-balancing");
   const [customName, setCustomName] = useState("");
+  const [intervalKm, setIntervalKm] = useState("");
+  const [intervalMonths, setIntervalMonths] = useState("");
+  const [lastExecutionKm, setLastExecutionKm] = useState("");
+  const [lastExecutionDate, setLastExecutionDate] = useState("");
   const [nextKm, setNextKm] = useState("");
   const [nextDate, setNextDate] = useState("");
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
@@ -176,6 +186,7 @@ export default function VehicleDetailsScreen() {
         : [],
     [allMaintenanceEvents, id],
   );
+  const selectedCustomType = customMaintenanceTypes.find((type) => type.id === selectedTypeId);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -232,17 +243,30 @@ export default function VehicleDetailsScreen() {
       return;
     }
 
-    const schedule = calculateMaintenanceSchedule(typeId, vehicle.currentKm);
+    const isReusableCustomType = typeId.startsWith("custom-");
+    const schedule = isReusableCustomType
+      ? {}
+      : calculateMaintenanceSchedule(typeId, vehicle.currentKm);
     setNextKm(schedule.nextKm === undefined ? "" : String(schedule.nextKm));
     setNextDate(formatBrazilianDateInput(schedule.nextDate));
+    setLastExecutionKm("");
+    setLastExecutionDate("");
 
     if (typeId !== "custom") {
       setCustomName("");
+      setIntervalKm("");
+      setIntervalMonths("");
     }
   }
 
   function openMaintenanceModal() {
     setCustomName("");
+    setIntervalKm("");
+    setIntervalMonths("");
+    setLastExecutionKm("");
+    setLastExecutionDate("");
+    setNextKm("");
+    setNextDate("");
     setMaintenanceError(null);
     setIsMaintenanceModalOpen(true);
     applyMaintenanceType(selectedTypeId);
@@ -256,6 +280,54 @@ export default function VehicleDetailsScreen() {
 
   async function handleMaintenanceSubmit() {
     if (!vehicle) {
+      return;
+    }
+
+    const isCreatingCustomType = selectedTypeId === "custom";
+
+    if (isCreatingCustomType || selectedCustomType) {
+      const parsedIntervalKm = intervalKm.trim()
+        ? Number.parseInt(intervalKm, 10)
+        : selectedCustomType?.intervalKm;
+      const parsedIntervalMonths = intervalMonths.trim()
+        ? Number.parseInt(intervalMonths, 10)
+        : selectedCustomType?.intervalMonths;
+      const parsedLastExecutionKm = lastExecutionKm.trim()
+        ? Number.parseInt(lastExecutionKm, 10)
+        : undefined;
+      const parsedLastExecutionDateResult = lastExecutionDate.trim()
+        ? validateBrazilianPastOrTodayDateInput(lastExecutionDate)
+        : undefined;
+
+      if (parsedLastExecutionDateResult && !parsedLastExecutionDateResult.isValid) {
+        setMaintenanceError(parsedLastExecutionDateResult.message);
+        return;
+      }
+
+      try {
+        setIsSavingMaintenance(true);
+        if (isCreatingCustomType) {
+          await createCustomMaintenanceEvent(vehicle.id, {
+            name: customName,
+            intervalKm: parsedIntervalKm,
+            intervalMonths: parsedIntervalMonths,
+            lastExecutionKm: parsedLastExecutionKm,
+            lastExecutionDate: parsedLastExecutionDateResult?.date.toISOString(),
+          });
+        } else if (selectedCustomType) {
+          await addCustomMaintenanceEvent(vehicle.id, selectedCustomType.id, {
+            lastExecutionKm: parsedLastExecutionKm,
+            lastExecutionDate: parsedLastExecutionDateResult?.date.toISOString(),
+          });
+        }
+        closeMaintenanceModal();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Erro inesperado ao salvar manutenção.";
+        setMaintenanceError(message);
+        Alert.alert("Não foi possível salvar", message);
+      } finally {
+        setIsSavingMaintenance(false);
+      }
       return;
     }
 
@@ -471,58 +543,160 @@ export default function VehicleDetailsScreen() {
                       </TypeOption>
                     );
                   })}
+                  {customMaintenanceTypes.map((type) => {
+                    const isSelected = selectedTypeId === type.id;
+                    return (
+                      <TypeOption
+                        key={type.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => {
+                          applyMaintenanceType(type.id);
+                        }}
+                        $selected={isSelected}
+                      >
+                        <AppText $color={isSelected ? "white" : "text"} $weight={700}>
+                          {type.name}
+                        </AppText>
+                        <AppText $color={isSelected ? "white" : "muted"} $size={12}>
+                          Personalizada
+                        </AppText>
+                      </TypeOption>
+                    );
+                  })}
                 </Column>
               </Field>
 
               {selectedTypeId === "custom" ? (
-                <Field>
-                  <AppText $weight={600}>Nome da manutenção</AppText>
-                  <FieldInput
-                    value={customName}
-                    onChangeText={(value) => {
-                      setCustomName(value);
-                      setMaintenanceError(null);
-                    }}
-                    accessibilityLabel="Nome da manutenção personalizada"
-                    maxLength={80}
-                    placeholder="Ex: Troca de correia auxiliar"
-                    placeholderTextColor="#757575"
-                    $hasError={Boolean(maintenanceError && !customName.trim())}
-                  />
-                </Field>
+                <>
+                  <Field>
+                    <AppText $weight={600}>Nome da manutenção</AppText>
+                    <FieldInput
+                      value={customName}
+                      onChangeText={(value) => {
+                        setCustomName(value);
+                        setMaintenanceError(null);
+                      }}
+                      accessibilityLabel="Nome da manutenção personalizada"
+                      maxLength={80}
+                      placeholder="Ex: Troca de correia auxiliar"
+                      placeholderTextColor="#757575"
+                      $hasError={Boolean(maintenanceError && !customName.trim())}
+                    />
+                  </Field>
+                  <Field>
+                    <AppText $weight={600}>Intervalo em km</AppText>
+                    <FieldInput
+                      value={intervalKm}
+                      onChangeText={(value) => {
+                        setIntervalKm(value.replace(/\D/g, "").slice(0, 9));
+                        setMaintenanceError(null);
+                      }}
+                      accessibilityLabel="Intervalo da manutenção em quilômetros"
+                      keyboardType="number-pad"
+                      maxLength={9}
+                      placeholder="Opcional"
+                      placeholderTextColor="#757575"
+                    />
+                  </Field>
+                  <Field>
+                    <AppText $weight={600}>Intervalo em meses</AppText>
+                    <FieldInput
+                      value={intervalMonths}
+                      onChangeText={(value) => {
+                        setIntervalMonths(value.replace(/\D/g, "").slice(0, 4));
+                        setMaintenanceError(null);
+                      }}
+                      accessibilityLabel="Intervalo da manutenção em meses"
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      placeholder="Opcional"
+                      placeholderTextColor="#757575"
+                    />
+                  </Field>
+                </>
               ) : null}
 
-              <Field>
-                <AppText $weight={600}>Próxima km</AppText>
-                <FieldInput
-                  value={nextKm}
-                  onChangeText={(value) => {
-                    setNextKm(value.replace(/\D/g, "").slice(0, 9));
-                    setMaintenanceError(null);
-                  }}
-                  accessibilityLabel="Próxima quilometragem da manutenção"
-                  keyboardType="number-pad"
-                  maxLength={9}
-                  placeholder="Opcional"
-                  placeholderTextColor="#757575"
-                />
-              </Field>
+              {selectedTypeId === "custom" || selectedCustomType ? (
+                <>
+                  {(
+                    selectedTypeId === "custom"
+                      ? Boolean(intervalKm.trim())
+                      : selectedCustomType?.intervalKm !== undefined
+                  ) ? (
+                    <Field>
+                      <AppText $weight={600}>Km da última execução</AppText>
+                      <FieldInput
+                        value={lastExecutionKm}
+                        onChangeText={(value) => {
+                          setLastExecutionKm(value.replace(/\D/g, "").slice(0, 9));
+                          setMaintenanceError(null);
+                        }}
+                        accessibilityLabel="Quilometragem da última execução"
+                        keyboardType="number-pad"
+                        maxLength={9}
+                        placeholder={`Até ${vehicle.currentKm.toLocaleString("pt-BR")} km`}
+                        placeholderTextColor="#757575"
+                      />
+                    </Field>
+                  ) : null}
+                  {(
+                    selectedTypeId === "custom"
+                      ? Boolean(intervalMonths.trim())
+                      : selectedCustomType?.intervalMonths !== undefined
+                  ) ? (
+                    <Field>
+                      <AppText $weight={600}>Data da última execução</AppText>
+                      <FieldInput
+                        value={lastExecutionDate}
+                        onChangeText={(value) => {
+                          setLastExecutionDate(maskBrazilianDateInput(value));
+                          setMaintenanceError(null);
+                        }}
+                        accessibilityHint="Use o formato DD/MM/AAAA."
+                        accessibilityLabel="Data da última execução"
+                        maxLength={10}
+                        placeholder="DD/MM/AAAA"
+                        placeholderTextColor="#757575"
+                      />
+                    </Field>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Field>
+                    <AppText $weight={600}>Próxima km</AppText>
+                    <FieldInput
+                      value={nextKm}
+                      onChangeText={(value) => {
+                        setNextKm(value.replace(/\D/g, "").slice(0, 9));
+                        setMaintenanceError(null);
+                      }}
+                      accessibilityLabel="Próxima quilometragem da manutenção"
+                      keyboardType="number-pad"
+                      maxLength={9}
+                      placeholder="Opcional"
+                      placeholderTextColor="#757575"
+                    />
+                  </Field>
 
-              <Field>
-                <AppText $weight={600}>Data limite</AppText>
-                <FieldInput
-                  value={nextDate}
-                  onChangeText={(value) => {
-                    setNextDate(maskBrazilianDateInput(value));
-                    setMaintenanceError(null);
-                  }}
-                  accessibilityHint="Use o formato DD/MM/AAAA."
-                  accessibilityLabel="Data limite da manutenção"
-                  maxLength={10}
-                  placeholder="DD/MM/AAAA"
-                  placeholderTextColor="#757575"
-                />
-              </Field>
+                  <Field>
+                    <AppText $weight={600}>Data limite</AppText>
+                    <FieldInput
+                      value={nextDate}
+                      onChangeText={(value) => {
+                        setNextDate(maskBrazilianDateInput(value));
+                        setMaintenanceError(null);
+                      }}
+                      accessibilityHint="Use o formato DD/MM/AAAA."
+                      accessibilityLabel="Data limite da manutenção"
+                      maxLength={10}
+                      placeholder="DD/MM/AAAA"
+                      placeholderTextColor="#757575"
+                    />
+                  </Field>
+                </>
+              )}
             </FormScroll>
 
             <Footer>

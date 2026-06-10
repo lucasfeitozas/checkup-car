@@ -29,6 +29,7 @@ describe("vehicleStore", () => {
       vehicles: [],
       kmRecords: [],
       maintenanceEvents: [],
+      customMaintenanceTypes: [],
       kmPromptFrequency: "daily",
       lastKmPromptAtByVehicleId: {},
       isHydrated: false,
@@ -108,6 +109,15 @@ describe("vehicleStore", () => {
           createdAt: "2026-06-01T10:00:00.000Z",
         },
       ],
+      customMaintenanceTypes: [
+        {
+          id: "custom-revisao-especial",
+          name: "Revisão especial",
+          intervalKm: 10000,
+          intervalMonths: 6,
+          createdAt: "2026-06-01T10:00:00.000Z",
+        },
+      ],
       kmPromptFrequency: "weekly",
       lastKmPromptAtByVehicleId: { "v-1": "2026-06-01T10:00:00.000Z" },
     };
@@ -145,6 +155,33 @@ describe("vehicleStore", () => {
     await useVehicleStore.getState().hydrate();
 
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
+  });
+
+  it("keeps legacy custom maintenance events during hydration", async () => {
+    const key = "checkup-car.vehicles.user-1";
+    const legacyEvent = {
+      id: "maintenance-legacy",
+      vehicleId: "v-1",
+      typeId: "custom",
+      name: "Revisão antiga",
+      nextKm: 50000,
+      createdAt: "2026-06-01T10:00:00.000Z",
+    };
+    secureStoreMock.getItemAsync.mockImplementation(async (k) =>
+      k === key
+        ? JSON.stringify({
+            vehicles: [],
+            kmRecords: [],
+            maintenanceEvents: [legacyEvent],
+            kmPromptFrequency: "daily",
+            lastKmPromptAtByVehicleId: {},
+          })
+        : null,
+    );
+
+    await useVehicleStore.getState().hydrate();
+
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([legacyEvent]);
   });
 
   it("blocks duplicate plate (case/format insensitive)", async () => {
@@ -259,6 +296,100 @@ describe("vehicleStore", () => {
     });
   });
 
+  it("creates and persists a reusable custom maintenance type with its first event", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    const event = await useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+      name: "  Revisão   especial ",
+      intervalKm: 10000,
+      intervalMonths: 6,
+      lastExecutionKm: 40000,
+      lastExecutionDate: "2025-06-10T12:00:00.000Z",
+    });
+
+    const [type] = useVehicleStore.getState().customMaintenanceTypes;
+    expect(type).toMatchObject({
+      id: expect.stringMatching(/^custom-/),
+      name: "Revisão especial",
+      intervalKm: 10000,
+      intervalMonths: 6,
+    });
+    expect(event).toMatchObject({
+      vehicleId: created.id,
+      typeId: type?.id,
+      name: "Revisão especial",
+      nextKm: 50000,
+      nextDate: "2025-12-10T12:00:00.000Z",
+    });
+  });
+
+  it("reuses a custom maintenance type on another vehicle", async () => {
+    const first = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ plate: "ABC-1234" }));
+    const second = await useVehicleStore
+      .getState()
+      .addVehicle(createVehicleInput({ plate: "DEF-5678", currentKm: 80000 }));
+    await useVehicleStore.getState().createCustomMaintenanceEvent(first.id, {
+      name: "Revisão especial",
+      intervalKm: 10000,
+      lastExecutionKm: 40000,
+    });
+    const [type] = useVehicleStore.getState().customMaintenanceTypes;
+    if (!type) throw new Error("Expected a custom maintenance type");
+
+    const event = await useVehicleStore.getState().addCustomMaintenanceEvent(second.id, type.id, {
+      lastExecutionKm: 75000,
+    });
+
+    expect(event).toMatchObject({
+      vehicleId: second.id,
+      typeId: type.id,
+      name: "Revisão especial",
+      nextKm: 85000,
+    });
+  });
+
+  it("rejects duplicate custom maintenance names after normalization", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    await useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+      name: "Revisão especial",
+      intervalKm: 10000,
+      lastExecutionKm: 40000,
+    });
+
+    await expect(
+      useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+        name: "  REVISÃO   ESPECIAL ",
+        intervalMonths: 6,
+        lastExecutionDate: "2025-06-10T12:00:00.000Z",
+      }),
+    ).rejects.toThrow("Já existe uma manutenção personalizada com esse nome.");
+  });
+
+  it("validates custom maintenance intervals and execution bases", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    await expect(
+      useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+        name: "Revisão especial",
+      }),
+    ).rejects.toThrow("Informe um intervalo em km, em meses ou ambos.");
+    await expect(
+      useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+        name: "Revisão especial",
+        intervalKm: 10000,
+        lastExecutionKm: 43000,
+      }),
+    ).rejects.toThrow("Última km não pode ser maior que a km atual do veículo.");
+    await expect(
+      useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+        name: "Revisão especial",
+        intervalMonths: 6,
+      }),
+    ).rejects.toThrow("Informe a data da última execução.");
+  });
+
   it("rejects maintenance events for missing vehicles", async () => {
     await expect(
       useVehicleStore.getState().addMaintenanceEvent("missing-vehicle", {
@@ -289,6 +420,22 @@ describe("vehicleStore", () => {
       }),
     ).rejects.toThrow(/Não foi possível salvar a manutenção localmente/i);
 
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
+  });
+
+  it("rolls back custom type and event atomically when local persistence fails", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(
+      useVehicleStore.getState().createCustomMaintenanceEvent(created.id, {
+        name: "Revisão especial",
+        intervalKm: 10000,
+        lastExecutionKm: 40000,
+      }),
+    ).rejects.toThrow(/Não foi possível salvar a manutenção localmente/i);
+
+    expect(useVehicleStore.getState().customMaintenanceTypes).toEqual([]);
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
   });
 
