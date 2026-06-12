@@ -1,0 +1,102 @@
+name: Start Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Semantic version increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: start-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate develop
+    uses: ./.github/workflows/ci-validation.yml
+    with:
+      checkout_ref: develop
+
+  prepare:
+    name: Prepare release
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Increment npm version
+        run: npm version "${{ inputs.release_type }}" --no-git-tag-version
+
+      - name: Synchronize Expo version
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const packageJson = require("./package.json");
+            const appJson = require("./app.json");
+            appJson.expo.version = packageJson.version;
+            fs.writeFileSync("app.json", `${JSON.stringify(appJson, null, 2)}\n`);
+          '
+
+      - name: Create and push release branch
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          BRANCH="release/v${VERSION}"
+
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            echo "::error::Branch ${BRANCH} already exists."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${BRANCH}"
+          git add package.json package-lock.json app.json
+          git commit -m "chore: preparar release v${VERSION}"
+          git push --set-upstream origin "${BRANCH}"
+
+          {
+            echo "version=${VERSION}"
+            echo "branch=${BRANCH}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Open release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          BRANCH: ${{ steps.release.outputs.branch }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${BRANCH}" \
+            --title "release: v${VERSION}" \
+            --body "## Release v${VERSION}
+
+          Release preparada automaticamente a partir de \`develop\`.
+
+          Após o merge em \`main\`, o workflow **Finish Release** aguardará aprovação no environment \`production\` antes de criar a tag e o GitHub Release."

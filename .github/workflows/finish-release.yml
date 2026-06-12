@@ -1,0 +1,86 @@
+name: Finish Release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finish-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/'))
+    uses: ./.github/workflows/ci-validation.yml
+    with:
+      checkout_ref: main
+
+  publish:
+    name: Approve, tag and publish
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate release version
+        id: version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          EXPO_VERSION="$(node -p "require('./app.json').expo.version")"
+
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid semantic version: ${VERSION}"
+            exit 1
+          fi
+
+          if [[ "${VERSION}" != "${EXPO_VERSION}" ]]; then
+            echo "::error::package.json (${VERSION}) and app.json (${EXPO_VERSION}) versions differ."
+            exit 1
+          fi
+
+          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists; keeping the existing release state."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "${TAG}" --message "Release ${TAG}"
+          git push origin "${TAG}"
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes \
+            --verify-tag
