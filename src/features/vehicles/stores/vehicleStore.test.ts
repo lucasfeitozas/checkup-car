@@ -519,6 +519,90 @@ describe("vehicleStore", () => {
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([event]);
   });
 
+  it("edits type, interval and last execution while recalculating the schedule", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "brake-check",
+      nextKm: 57000,
+    });
+
+    const updated = await useVehicleStore.getState().updateMaintenanceEvent(event.id, {
+      typeId: "brake-fluid",
+      intervalKm: 15000,
+      intervalMonths: 6,
+      lastExecutionKm: 40000,
+      lastExecutionDate: "2026-06-10T12:00:00.000Z",
+    });
+
+    expect(updated).toMatchObject({
+      id: event.id,
+      typeId: "brake-fluid",
+      name: "Fluido de freio",
+      intervalKm: 15000,
+      intervalMonths: 6,
+      lastExecutionKm: 40000,
+      lastExecutionDate: "2026-06-10T12:00:00.000Z",
+      nextKm: 55000,
+      nextDate: "2026-12-10T12:00:00.000Z",
+    });
+  });
+
+  it("rolls back maintenance edits when local persistence fails", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "brake-check",
+      nextKm: 57000,
+    });
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(
+      useVehicleStore.getState().updateMaintenanceEvent(event.id, {
+        typeId: "spark-plugs",
+        intervalKm: 10000,
+        lastExecutionKm: 40000,
+      }),
+    ).rejects.toThrow(/Não foi possível editar a manutenção localmente/i);
+
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([event]);
+  });
+
+  it("deletes a maintenance event and its execution history", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+    });
+    await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+    });
+
+    await useVehicleStore.getState().deleteMaintenanceEvent(event.id);
+
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
+    expect(useVehicleStore.getState().executionHistory).toEqual([]);
+  });
+
+  it("rolls back event deletion when local persistence fails", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+    });
+    const execution = await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+    });
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(useVehicleStore.getState().deleteMaintenanceEvent(event.id)).rejects.toThrow(
+      /Não foi possível excluir a manutenção localmente/i,
+    );
+
+    expect(useVehicleStore.getState().maintenanceEvents).toHaveLength(1);
+    expect(useVehicleStore.getState().executionHistory).toEqual([execution]);
+  });
+
   it("returns vehicles pending km prompt according to configured frequency", async () => {
     const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
 
