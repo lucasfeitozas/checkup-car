@@ -3,6 +3,10 @@ import { create } from "zustand";
 import { useAuthStore } from "@/features/auth/stores/authStore";
 import type { KmPromptFrequency } from "@/features/vehicles/rules/kmReminder";
 import { shouldRequestKmUpdate } from "@/features/vehicles/rules/kmReminder";
+import type {
+  MaintenanceEventFilter,
+  MaintenanceEventSort,
+} from "@/features/vehicles/rules/maintenanceEventList";
 import {
   calculateCustomMaintenanceSchedule,
   getMaintenanceEventType,
@@ -124,6 +128,8 @@ export type VehicleState = {
   maintenanceEvents: MaintenanceEvent[];
   executionHistory: MaintenanceExecution[];
   customMaintenanceTypes: CustomMaintenanceType[];
+  maintenanceEventSort: MaintenanceEventSort;
+  maintenanceEventFilter: MaintenanceEventFilter;
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
   isHydrated: boolean;
@@ -154,6 +160,8 @@ export type VehicleState = {
   recordKm: (vehicleId: string, currentKm: number, recordedAt?: string) => Promise<KmRecord>;
   updateKm: (vehicleId: string, currentKm: number) => Promise<void>;
   setKmPromptFrequency: (frequency: KmPromptFrequency) => Promise<void>;
+  setMaintenanceEventSort: (sort: MaintenanceEventSort) => Promise<void>;
+  setMaintenanceEventFilter: (filter: MaintenanceEventFilter) => Promise<void>;
   markKmPromptShown: (vehicleId: string, promptedAt?: string) => Promise<void>;
   getVehicleById: (vehicleId: string) => Vehicle | undefined;
   getVehicleList: () => VehicleListItem[];
@@ -166,6 +174,8 @@ export type VehicleState = {
 export const MAX_VEHICLES_PER_USER = 5;
 const VEHICLES_KEY_PREFIX = "checkup-car.vehicles.";
 const DEFAULT_KM_PROMPT_FREQUENCY: KmPromptFrequency = "daily";
+const DEFAULT_MAINTENANCE_EVENT_SORT: MaintenanceEventSort = "next-km";
+const DEFAULT_MAINTENANCE_EVENT_FILTER: MaintenanceEventFilter = "all";
 
 function canonicalizePlate(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -183,6 +193,8 @@ type PersistedVehicleState = {
   maintenanceEvents: MaintenanceEvent[];
   executionHistory: MaintenanceExecution[];
   customMaintenanceTypes: CustomMaintenanceType[];
+  maintenanceEventSort: MaintenanceEventSort;
+  maintenanceEventFilter: MaintenanceEventFilter;
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
 };
@@ -193,6 +205,20 @@ function createId(prefix: string): string {
 
 function isKmPromptFrequency(value: unknown): value is KmPromptFrequency {
   return value === "daily" || value === "weekly";
+}
+
+function isMaintenanceEventSort(value: unknown): value is MaintenanceEventSort {
+  return value === "next-km" || value === "next-date" || value === "name";
+}
+
+function isMaintenanceEventFilter(value: unknown): value is MaintenanceEventFilter {
+  return (
+    value === "all" ||
+    value === "pending" ||
+    value === "alert" ||
+    value === "overdue" ||
+    value === "completed"
+  );
 }
 
 function isMaintenanceEventTypeId(value: unknown): value is MaintenanceEventTypeId {
@@ -285,6 +311,8 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       maintenanceEvents: [],
       executionHistory: [],
       customMaintenanceTypes: [],
+      maintenanceEventSort: DEFAULT_MAINTENANCE_EVENT_SORT,
+      maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
     };
@@ -297,6 +325,8 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       maintenanceEvents: [],
       executionHistory: [],
       customMaintenanceTypes: [],
+      maintenanceEventSort: DEFAULT_MAINTENANCE_EVENT_SORT,
+      maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
     };
@@ -323,6 +353,12 @@ function parsePersistedState(raw: string): PersistedVehicleState {
     maintenanceEvents,
     executionHistory,
     customMaintenanceTypes,
+    maintenanceEventSort: isMaintenanceEventSort(state.maintenanceEventSort)
+      ? state.maintenanceEventSort
+      : DEFAULT_MAINTENANCE_EVENT_SORT,
+    maintenanceEventFilter: isMaintenanceEventFilter(state.maintenanceEventFilter)
+      ? state.maintenanceEventFilter
+      : DEFAULT_MAINTENANCE_EVENT_FILTER,
     kmPromptFrequency: isKmPromptFrequency(state.kmPromptFrequency)
       ? state.kmPromptFrequency
       : DEFAULT_KM_PROMPT_FREQUENCY,
@@ -345,6 +381,8 @@ function buildPersistedState(state: VehicleState): PersistedVehicleState {
     maintenanceEvents: state.maintenanceEvents,
     executionHistory: state.executionHistory,
     customMaintenanceTypes: state.customMaintenanceTypes,
+    maintenanceEventSort: state.maintenanceEventSort,
+    maintenanceEventFilter: state.maintenanceEventFilter,
     kmPromptFrequency: state.kmPromptFrequency,
     lastKmPromptAtByVehicleId: state.lastKmPromptAtByVehicleId,
   };
@@ -356,6 +394,8 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   maintenanceEvents: [],
   executionHistory: [],
   customMaintenanceTypes: [],
+  maintenanceEventSort: DEFAULT_MAINTENANCE_EVENT_SORT,
+  maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
   kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
   lastKmPromptAtByVehicleId: {},
   isHydrated: false,
@@ -370,6 +410,8 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         maintenanceEvents: [],
         executionHistory: [],
         customMaintenanceTypes: [],
+        maintenanceEventSort: DEFAULT_MAINTENANCE_EVENT_SORT,
+        maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
         isHydrated: true,
@@ -387,6 +429,8 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         maintenanceEvents: [],
         executionHistory: [],
         customMaintenanceTypes: [],
+        maintenanceEventSort: DEFAULT_MAINTENANCE_EVENT_SORT,
+        maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
         isHydrated: true,
@@ -847,6 +891,30 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       set(previous);
       const message = e instanceof Error ? e.message : "Erro inesperado ao salvar configuração.";
       throw new Error(`Não foi possível salvar a frequência localmente. ${message}`);
+    }
+  },
+  async setMaintenanceEventSort(sort) {
+    const previous = buildPersistedState(get());
+    set({ maintenanceEventSort: sort });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar ordenação.";
+      throw new Error(`Não foi possível salvar a ordenação localmente. ${message}`);
+    }
+  },
+  async setMaintenanceEventFilter(filter) {
+    const previous = buildPersistedState(get());
+    set({ maintenanceEventFilter: filter });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar filtro.";
+      throw new Error(`Não foi possível salvar o filtro localmente. ${message}`);
     }
   },
   async markKmPromptShown(vehicleId, promptedAt = new Date().toISOString()) {
