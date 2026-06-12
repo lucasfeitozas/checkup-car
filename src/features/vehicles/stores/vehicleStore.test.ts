@@ -29,6 +29,7 @@ describe("vehicleStore", () => {
       vehicles: [],
       kmRecords: [],
       maintenanceEvents: [],
+      executionHistory: [],
       customMaintenanceTypes: [],
       kmPromptFrequency: "daily",
       lastKmPromptAtByVehicleId: {},
@@ -75,6 +76,7 @@ describe("vehicleStore", () => {
       },
     ]);
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
+    expect(useVehicleStore.getState().executionHistory).toEqual([]);
   });
 
   it("hydrates persisted vehicle state with km records, maintenance events and prompt settings", async () => {
@@ -107,6 +109,16 @@ describe("vehicleStore", () => {
           name: "Velas de ignição",
           nextKm: 11200,
           createdAt: "2026-06-01T10:00:00.000Z",
+        },
+      ],
+      executionHistory: [
+        {
+          id: "execution-1",
+          vehicleEventId: "maintenance-1",
+          executionKm: 11000,
+          executionDate: "2026-06-02T12:00:00.000Z",
+          value: 250,
+          location: "Oficina Central",
         },
       ],
       customMaintenanceTypes: [
@@ -437,6 +449,74 @@ describe("vehicleStore", () => {
 
     expect(useVehicleStore.getState().customMaintenanceTypes).toEqual([]);
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([]);
+  });
+
+  it("registers an execution, recalculates the event and saves it in history", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "brake-fluid",
+      nextKm: 52000,
+      nextDate: "2027-01-01T12:00:00.000Z",
+    });
+
+    const execution = await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+      value: 350.5,
+      location: "  Oficina Central  ",
+    });
+
+    expect(execution).toMatchObject({
+      vehicleEventId: event.id,
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+      value: 350.5,
+      location: "Oficina Central",
+    });
+    expect(useVehicleStore.getState().getMaintenanceEventsByVehicleId(created.id)[0]).toMatchObject(
+      {
+        id: event.id,
+        nextKm: 51000,
+        nextDate: "2027-06-10T12:00:00.000Z",
+      },
+    );
+    expect(useVehicleStore.getState().getExecutionHistoryByVehicleId(created.id)).toEqual([
+      execution,
+    ]);
+  });
+
+  it("rejects invalid maintenance executions", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "brake-check",
+      nextKm: 57000,
+    });
+
+    await expect(
+      useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+        executionKm: 42001,
+        executionDate: "2026-06-10T12:00:00.000Z",
+      }),
+    ).rejects.toThrow("Km de execução não pode ser maior que a km atual.");
+  });
+
+  it("rolls back event and history when execution persistence fails", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+    });
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(
+      useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+        executionKm: 41000,
+        executionDate: "2026-06-10T12:00:00.000Z",
+      }),
+    ).rejects.toThrow(/Não foi possível salvar a execução localmente/i);
+
+    expect(useVehicleStore.getState().executionHistory).toEqual([]);
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual([event]);
   });
 
   it("returns vehicles pending km prompt according to configured frequency", async () => {
