@@ -11,6 +11,10 @@ import {
   validateCustomMaintenanceInput,
   type MaintenanceEventTypeId,
 } from "@/features/vehicles/rules/maintenanceEvents";
+import {
+  calculateScheduleAfterExecution,
+  validateMaintenanceExecution,
+} from "@/features/vehicles/rules/maintenanceExecution";
 import { storage } from "@/core/storage/storage";
 
 export type Vehicle = {
@@ -54,6 +58,22 @@ export type MaintenanceEvent = {
   createdAt: string;
 };
 
+export type MaintenanceExecution = {
+  id: string;
+  vehicleEventId: string;
+  executionKm: number;
+  executionDate: string;
+  value?: number;
+  location?: string;
+};
+
+export type MaintenanceExecutionInput = {
+  executionKm: number;
+  executionDate: string;
+  value?: number;
+  location?: string;
+};
+
 export type CustomMaintenanceType = {
   id: `custom-${string}`;
   name: string;
@@ -89,6 +109,7 @@ export type VehicleState = {
   vehicles: Vehicle[];
   kmRecords: KmRecord[];
   maintenanceEvents: MaintenanceEvent[];
+  executionHistory: MaintenanceExecution[];
   customMaintenanceTypes: CustomMaintenanceType[];
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
@@ -108,6 +129,10 @@ export type VehicleState = {
     typeId: CustomMaintenanceType["id"],
     input: CustomMaintenanceExecutionInput,
   ) => Promise<MaintenanceEvent>;
+  executeMaintenanceEvent: (
+    eventId: string,
+    input: MaintenanceExecutionInput,
+  ) => Promise<MaintenanceExecution>;
   recordKm: (vehicleId: string, currentKm: number, recordedAt?: string) => Promise<KmRecord>;
   updateKm: (vehicleId: string, currentKm: number) => Promise<void>;
   setKmPromptFrequency: (frequency: KmPromptFrequency) => Promise<void>;
@@ -116,6 +141,7 @@ export type VehicleState = {
   getVehicleList: () => VehicleListItem[];
   getKmRecordsByVehicleId: (vehicleId: string) => KmRecord[];
   getMaintenanceEventsByVehicleId: (vehicleId: string) => MaintenanceEvent[];
+  getExecutionHistoryByVehicleId: (vehicleId: string) => MaintenanceExecution[];
   getVehiclesPendingKmPrompt: (now?: Date) => Vehicle[];
 };
 
@@ -137,6 +163,7 @@ type PersistedVehicleState = {
   vehicles: Vehicle[];
   kmRecords: KmRecord[];
   maintenanceEvents: MaintenanceEvent[];
+  executionHistory: MaintenanceExecution[];
   customMaintenanceTypes: CustomMaintenanceType[];
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
@@ -193,6 +220,24 @@ function isValidCustomMaintenanceType(value: unknown): value is CustomMaintenanc
   );
 }
 
+function isValidMaintenanceExecution(value: unknown): value is MaintenanceExecution {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const execution = value as Partial<MaintenanceExecution>;
+  return (
+    typeof execution.id === "string" &&
+    typeof execution.vehicleEventId === "string" &&
+    Number.isInteger(execution.executionKm) &&
+    typeof execution.executionDate === "string" &&
+    !Number.isNaN(Date.parse(execution.executionDate)) &&
+    (execution.value === undefined ||
+      (typeof execution.value === "number" && Number.isFinite(execution.value))) &&
+    (execution.location === undefined || typeof execution.location === "string")
+  );
+}
+
 function createInitialKmRecord(vehicle: Vehicle): KmRecord {
   return {
     id: `km-${vehicle.id}-initial`,
@@ -211,6 +256,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       vehicles,
       kmRecords: vehicles.map(createInitialKmRecord),
       maintenanceEvents: [],
+      executionHistory: [],
       customMaintenanceTypes: [],
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
@@ -222,6 +268,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       vehicles: [],
       kmRecords: [],
       maintenanceEvents: [],
+      executionHistory: [],
       customMaintenanceTypes: [],
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
@@ -239,11 +286,15 @@ function parsePersistedState(raw: string): PersistedVehicleState {
   const customMaintenanceTypes = Array.isArray(state.customMaintenanceTypes)
     ? state.customMaintenanceTypes.filter(isValidCustomMaintenanceType)
     : [];
+  const executionHistory = Array.isArray(state.executionHistory)
+    ? state.executionHistory.filter(isValidMaintenanceExecution)
+    : [];
 
   return {
     vehicles,
     kmRecords,
     maintenanceEvents,
+    executionHistory,
     customMaintenanceTypes,
     kmPromptFrequency: isKmPromptFrequency(state.kmPromptFrequency)
       ? state.kmPromptFrequency
@@ -265,6 +316,7 @@ function buildPersistedState(state: VehicleState): PersistedVehicleState {
     vehicles: state.vehicles,
     kmRecords: state.kmRecords,
     maintenanceEvents: state.maintenanceEvents,
+    executionHistory: state.executionHistory,
     customMaintenanceTypes: state.customMaintenanceTypes,
     kmPromptFrequency: state.kmPromptFrequency,
     lastKmPromptAtByVehicleId: state.lastKmPromptAtByVehicleId,
@@ -275,6 +327,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   vehicles: [],
   kmRecords: [],
   maintenanceEvents: [],
+  executionHistory: [],
   customMaintenanceTypes: [],
   kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
   lastKmPromptAtByVehicleId: {},
@@ -288,6 +341,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         vehicles: [],
         kmRecords: [],
         maintenanceEvents: [],
+        executionHistory: [],
         customMaintenanceTypes: [],
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
@@ -304,6 +358,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         vehicles: [],
         kmRecords: [],
         maintenanceEvents: [],
+        executionHistory: [],
         customMaintenanceTypes: [],
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
@@ -529,6 +584,65 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
 
     return event;
   },
+  async executeMaintenanceEvent(eventId, input) {
+    const event = get().maintenanceEvents.find((item) => item.id === eventId);
+    if (!event) {
+      throw new Error("Manutenção não encontrada.");
+    }
+
+    const vehicle = get().vehicles.find((item) => item.id === event.vehicleId);
+    if (!vehicle) {
+      throw new Error("Veículo não encontrado.");
+    }
+
+    const executionDate = new Date(input.executionDate);
+    const validation = validateMaintenanceExecution({
+      executionKm: input.executionKm,
+      executionDate,
+      currentKm: vehicle.currentKm,
+      value: input.value,
+    });
+    if (!validation.isValid) {
+      throw new Error(validation.message);
+    }
+
+    const customType = event.typeId.startsWith("custom-")
+      ? get().customMaintenanceTypes.find((item) => item.id === event.typeId)
+      : undefined;
+    const systemType = customType ? undefined : getMaintenanceEventType(event.typeId);
+    const schedule = calculateScheduleAfterExecution({
+      executionKm: input.executionKm,
+      executionDate,
+      intervalKm: customType?.intervalKm ?? systemType?.intervalKm,
+      intervalMonths: customType?.intervalMonths ?? systemType?.intervalMonths,
+    });
+    const execution: MaintenanceExecution = {
+      id: createId("execution"),
+      vehicleEventId: event.id,
+      executionKm: input.executionKm,
+      executionDate: executionDate.toISOString(),
+      value: input.value,
+      location: input.location?.trim() || undefined,
+    };
+    const previous = buildPersistedState(get());
+
+    set({
+      maintenanceEvents: get().maintenanceEvents.map((item) =>
+        item.id === event.id ? { ...item, ...schedule } : item,
+      ),
+      executionHistory: [execution, ...get().executionHistory],
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao registrar execução.";
+      throw new Error(`Não foi possível salvar a execução localmente. ${message}`);
+    }
+
+    return execution;
+  },
   async recordKm(vehicleId, currentKm, recordedAt = new Date().toISOString()) {
     const currentVehicle = get().vehicles.find((vehicle) => vehicle.id === vehicleId);
     if (!currentVehicle) {
@@ -628,6 +742,16 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     return get()
       .maintenanceEvents.filter((event) => event.vehicleId === vehicleId)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  },
+  getExecutionHistoryByVehicleId(vehicleId) {
+    const eventIds = new Set(
+      get()
+        .maintenanceEvents.filter((event) => event.vehicleId === vehicleId)
+        .map((event) => event.id),
+    );
+    return get()
+      .executionHistory.filter((execution) => eventIds.has(execution.vehicleEventId))
+      .sort((a, b) => Date.parse(b.executionDate) - Date.parse(a.executionDate));
   },
   getVehiclesPendingKmPrompt(now = new Date()) {
     const state = get();

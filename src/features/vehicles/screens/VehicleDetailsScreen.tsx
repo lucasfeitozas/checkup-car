@@ -5,9 +5,10 @@ import { Alert, Modal } from "react-native";
 import { styled } from "styled-components/native";
 
 import { KmUpdateModal } from "@/features/vehicles/components/KmUpdateModal";
+import { MaintenanceExecutionModal } from "@/features/vehicles/components/MaintenanceExecutionModal";
 import { Card } from "@/components/common/Card";
 import { AppText, Column, Row, Screen, ScreenContent, Title } from "@/components/common/styled";
-import { useVehicleStore } from "@/features/vehicles/stores/vehicleStore";
+import { type MaintenanceEvent, useVehicleStore } from "@/features/vehicles/stores/vehicleStore";
 import {
   calculateMaintenanceSchedule,
   formatBrazilianDateInput,
@@ -41,6 +42,19 @@ const HistoryRow = styled(Row)`
   border-top-width: 1px;
   border-top-color: ${({ theme }) => theme.border};
   padding: 12px 0;
+`;
+
+const ExecuteButton = styled.Pressable`
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background-color: ${({ theme }) => theme.primary};
+  padding: 0 12px;
+`;
+
+const RightColumn = styled(Column)`
+  align-items: flex-end;
 `;
 
 const ModalOverlay = styled.View`
@@ -145,6 +159,7 @@ export default function VehicleDetailsScreen() {
     (state) => state.createCustomMaintenanceEvent,
   );
   const addCustomMaintenanceEvent = useVehicleStore((state) => state.addCustomMaintenanceEvent);
+  const executeMaintenanceEvent = useVehicleStore((state) => state.executeMaintenanceEvent);
   const customMaintenanceTypes = useVehicleStore((state) => state.customMaintenanceTypes);
   const vehicle = useVehicleStore((state) =>
     typeof id === "string" ? state.vehicles.find((item) => item.id === id) : undefined,
@@ -153,6 +168,7 @@ export default function VehicleDetailsScreen() {
   const allMaintenanceEvents = useVehicleStore((state) => state.maintenanceEvents);
   const [isKmModalOpen, setIsKmModalOpen] = useState(false);
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
+  const [executionEvent, setExecutionEvent] = useState<MaintenanceEvent | undefined>();
   const [selectedTypeId, setSelectedTypeId] =
     useState<MaintenanceEventTypeId>("alignment-balancing");
   const [customName, setCustomName] = useState("");
@@ -430,7 +446,7 @@ export default function VehicleDetailsScreen() {
                     Criada em {new Date(event.createdAt).toLocaleDateString("pt-BR")}
                   </AppText>
                 </Column>
-                <Column $gap={4}>
+                <RightColumn $gap={8}>
                   <AppText $weight={600}>
                     {event.nextKm === undefined
                       ? "Sem km"
@@ -439,7 +455,18 @@ export default function VehicleDetailsScreen() {
                   <AppText $color="muted" $size={12}>
                     {formatMaintenanceDate(event.nextDate)}
                   </AppText>
-                </Column>
+                  <ExecuteButton
+                    accessibilityLabel={`Efetuar ${event.name}`}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setExecutionEvent(event);
+                    }}
+                  >
+                    <AppText $color="white" $weight={700}>
+                      Efetuar
+                    </AppText>
+                  </ExecuteButton>
+                </RightColumn>
               </HistoryRow>
             ))
           )}
@@ -495,6 +522,20 @@ export default function VehicleDetailsScreen() {
         onDismiss={() => {
           setIsKmModalOpen(false);
         }}
+      />
+      <MaintenanceExecutionModal
+        event={executionEvent}
+        onDismiss={() => {
+          setExecutionEvent(undefined);
+        }}
+        onSubmit={async (input) => {
+          if (!executionEvent) {
+            return;
+          }
+          await executeMaintenanceEvent(executionEvent.id, input);
+        }}
+        vehicle={vehicle}
+        visible={Boolean(executionEvent)}
       />
       <Modal
         transparent
