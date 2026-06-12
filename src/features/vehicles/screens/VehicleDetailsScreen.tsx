@@ -19,6 +19,14 @@ import {
   validateBrazilianFutureDateInput,
   validateBrazilianPastOrTodayDateInput,
 } from "@/features/vehicles/rules/maintenanceEvents";
+import {
+  filterMaintenanceEvents,
+  getMaintenanceEventStatus,
+  sortMaintenanceEvents,
+  type MaintenanceEventFilter,
+  type MaintenanceEventSort,
+  type MaintenanceEventStatus,
+} from "@/features/vehicles/rules/maintenanceEventList";
 
 const CompactScreen = styled.ScrollView.attrs(({ theme }) => ({
   contentContainerStyle: { gap: 16, padding: 20 },
@@ -62,6 +70,34 @@ const EventActionButton = styled.Pressable<{ $danger?: boolean }>`
   border-width: 1px;
   border-color: ${({ $danger, theme }) => ($danger ? theme.primary : theme.border)};
   padding: 0 12px;
+`;
+
+const PreferencesGroup = styled.View`
+  gap: 8px;
+`;
+
+const PreferencesOptions = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+const PreferenceButton = styled.Pressable<{ $selected: boolean }>`
+  min-height: 40px;
+  justify-content: center;
+  border-radius: 8px;
+  border-width: 1px;
+  border-color: ${({ $selected, theme }) => ($selected ? theme.primary : theme.border)};
+  background-color: ${({ $selected, theme }) => ($selected ? theme.primary : "transparent")};
+  padding: 0 12px;
+`;
+
+const StatusBadge = styled.View<{ $status: MaintenanceEventStatus }>`
+  align-self: flex-start;
+  border-radius: 999px;
+  border-width: 1px;
+  border-color: ${({ $status, theme }) => ($status === "pending" ? theme.border : theme.primary)};
+  padding: 4px 8px;
 `;
 
 const RightColumn = styled(Column)`
@@ -159,6 +195,26 @@ function formatMaintenanceDate(value?: string): string {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
+const SORT_OPTIONS: { value: MaintenanceEventSort; label: string }[] = [
+  { value: "next-km", label: "Próxima km" },
+  { value: "next-date", label: "Próxima data" },
+  { value: "name", label: "Nome A-Z" },
+];
+
+const FILTER_OPTIONS: { value: MaintenanceEventFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "pending", label: "Pendentes" },
+  { value: "alert", label: "Em alerta" },
+  { value: "overdue", label: "Vencidos" },
+  { value: "completed", label: "Concluídos" },
+];
+
+const STATUS_LABELS: Record<MaintenanceEventStatus, string> = {
+  pending: "Pendente",
+  alert: "Em alerta",
+  overdue: "Vencido",
+};
+
 export default function VehicleDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -173,12 +229,17 @@ export default function VehicleDetailsScreen() {
   const executeMaintenanceEvent = useVehicleStore((state) => state.executeMaintenanceEvent);
   const updateMaintenanceEvent = useVehicleStore((state) => state.updateMaintenanceEvent);
   const deleteMaintenanceEvent = useVehicleStore((state) => state.deleteMaintenanceEvent);
+  const maintenanceEventSort = useVehicleStore((state) => state.maintenanceEventSort);
+  const maintenanceEventFilter = useVehicleStore((state) => state.maintenanceEventFilter);
+  const setMaintenanceEventSort = useVehicleStore((state) => state.setMaintenanceEventSort);
+  const setMaintenanceEventFilter = useVehicleStore((state) => state.setMaintenanceEventFilter);
   const customMaintenanceTypes = useVehicleStore((state) => state.customMaintenanceTypes);
   const vehicle = useVehicleStore((state) =>
     typeof id === "string" ? state.vehicles.find((item) => item.id === id) : undefined,
   );
   const allKmRecords = useVehicleStore((state) => state.kmRecords);
   const allMaintenanceEvents = useVehicleStore((state) => state.maintenanceEvents);
+  const executionHistory = useVehicleStore((state) => state.executionHistory);
   const [isKmModalOpen, setIsKmModalOpen] = useState(false);
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [executionEvent, setExecutionEvent] = useState<MaintenanceEvent | undefined>();
@@ -207,15 +268,27 @@ export default function VehicleDetailsScreen() {
         : [],
     [allKmRecords, id],
   );
-  const maintenanceEvents = useMemo(
-    () =>
-      typeof id === "string"
-        ? allMaintenanceEvents
-            .filter((event) => event.vehicleId === id)
-            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-        : [],
-    [allMaintenanceEvents, id],
-  );
+  const maintenanceEvents = useMemo(() => {
+    if (typeof id !== "string" || !vehicle) {
+      return [];
+    }
+
+    const vehicleEvents = allMaintenanceEvents.filter((event) => event.vehicleId === id);
+    const filtered = filterMaintenanceEvents(
+      vehicleEvents,
+      [vehicle],
+      executionHistory,
+      maintenanceEventFilter,
+    );
+    return sortMaintenanceEvents(filtered, [vehicle], maintenanceEventSort);
+  }, [
+    allMaintenanceEvents,
+    executionHistory,
+    id,
+    maintenanceEventFilter,
+    maintenanceEventSort,
+    vehicle,
+  ]);
   const selectedCustomType = customMaintenanceTypes.find((type) => type.id === selectedTypeId);
 
   useEffect(() => {
@@ -419,6 +492,24 @@ export default function VehicleDetailsScreen() {
     );
   }
 
+  async function handleSortChange(sort: MaintenanceEventSort) {
+    try {
+      await setMaintenanceEventSort(sort);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar ordenação.";
+      Alert.alert("Não foi possível salvar", message);
+    }
+  }
+
+  async function handleFilterChange(filter: MaintenanceEventFilter) {
+    try {
+      await setMaintenanceEventFilter(filter);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar filtro.";
+      Alert.alert("Não foi possível salvar", message);
+    }
+  }
+
   return (
     <>
       <Screen>
@@ -470,13 +561,78 @@ export default function VehicleDetailsScreen() {
             <AppText $color="muted">Eventos e prazos salvos localmente para este veículo.</AppText>
           </Column>
 
+          <PreferencesGroup>
+            <AppText $weight={600}>Ordenar por</AppText>
+            <PreferencesOptions>
+              {SORT_OPTIONS.map((option) => {
+                const isSelected = maintenanceEventSort === option.value;
+                return (
+                  <PreferenceButton
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => {
+                      void handleSortChange(option.value);
+                    }}
+                    $selected={isSelected}
+                  >
+                    <AppText $color={isSelected ? "white" : "text"} $weight={700}>
+                      {option.label}
+                    </AppText>
+                  </PreferenceButton>
+                );
+              })}
+            </PreferencesOptions>
+          </PreferencesGroup>
+
+          <PreferencesGroup>
+            <AppText $weight={600}>Filtrar por status</AppText>
+            <PreferencesOptions>
+              {FILTER_OPTIONS.map((option) => {
+                const isSelected = maintenanceEventFilter === option.value;
+                return (
+                  <PreferenceButton
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => {
+                      void handleFilterChange(option.value);
+                    }}
+                    $selected={isSelected}
+                  >
+                    <AppText $color={isSelected ? "white" : "text"} $weight={700}>
+                      {option.label}
+                    </AppText>
+                  </PreferenceButton>
+                );
+              })}
+            </PreferencesOptions>
+          </PreferencesGroup>
+
           {maintenanceEvents.length === 0 ? (
-            <AppText $color="muted">Nenhuma manutenção cadastrada.</AppText>
+            <AppText $color="muted">
+              {allMaintenanceEvents.some((event) => event.vehicleId === vehicle.id)
+                ? "Nenhuma manutenção encontrada para o filtro selecionado."
+                : "Nenhuma manutenção cadastrada."}
+            </AppText>
           ) : (
             maintenanceEvents.map((event) => (
               <HistoryRow key={event.id} $align="flex-start" $justify="space-between">
-                <Column $gap={4} $flex={1}>
+                <Column $gap={6} $flex={1}>
                   <AppText $weight={700}>{event.name}</AppText>
+                  <StatusBadge $status={getMaintenanceEventStatus(event, vehicle.currentKm)}>
+                    <AppText
+                      $color={
+                        getMaintenanceEventStatus(event, vehicle.currentKm) === "pending"
+                          ? "muted"
+                          : "primary"
+                      }
+                      $size={12}
+                      $weight={700}
+                    >
+                      {STATUS_LABELS[getMaintenanceEventStatus(event, vehicle.currentKm)]}
+                    </AppText>
+                  </StatusBadge>
                   <AppText $color="muted" $size={12}>
                     Criada em {new Date(event.createdAt).toLocaleDateString("pt-BR")}
                   </AppText>

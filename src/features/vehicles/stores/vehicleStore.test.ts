@@ -31,6 +31,8 @@ describe("vehicleStore", () => {
       maintenanceEvents: [],
       executionHistory: [],
       customMaintenanceTypes: [],
+      maintenanceEventSort: "next-km",
+      maintenanceEventFilter: "all",
       kmPromptFrequency: "daily",
       lastKmPromptAtByVehicleId: {},
       isHydrated: false,
@@ -130,6 +132,8 @@ describe("vehicleStore", () => {
           createdAt: "2026-06-01T10:00:00.000Z",
         },
       ],
+      maintenanceEventSort: "next-date",
+      maintenanceEventFilter: "alert",
       kmPromptFrequency: "weekly",
       lastKmPromptAtByVehicleId: { "v-1": "2026-06-01T10:00:00.000Z" },
     };
@@ -194,6 +198,24 @@ describe("vehicleStore", () => {
     await useVehicleStore.getState().hydrate();
 
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([legacyEvent]);
+    expect(useVehicleStore.getState().maintenanceEventSort).toBe("next-km");
+    expect(useVehicleStore.getState().maintenanceEventFilter).toBe("all");
+  });
+
+  it("persists event sorting and filtering preferences with rollback on failure", async () => {
+    await useVehicleStore.getState().setMaintenanceEventSort("name");
+    await useVehicleStore.getState().setMaintenanceEventFilter("overdue");
+
+    expect(useVehicleStore.getState()).toMatchObject({
+      maintenanceEventSort: "name",
+      maintenanceEventFilter: "overdue",
+    });
+
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+    await expect(useVehicleStore.getState().setMaintenanceEventSort("next-date")).rejects.toThrow(
+      /Não foi possível salvar a ordenação localmente/i,
+    );
+    expect(useVehicleStore.getState().maintenanceEventSort).toBe("name");
   });
 
   it("blocks duplicate plate (case/format insensitive)", async () => {
