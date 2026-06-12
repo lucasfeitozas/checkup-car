@@ -53,6 +53,10 @@ export type MaintenanceEvent = {
   vehicleId: string;
   typeId: MaintenanceEventTypeId;
   name: string;
+  intervalKm?: number;
+  intervalMonths?: number;
+  lastExecutionKm?: number;
+  lastExecutionDate?: string;
   nextKm?: number;
   nextDate?: string;
   createdAt: string;
@@ -87,6 +91,15 @@ export type NewMaintenanceEventInput = {
   customName?: string;
   nextKm?: number;
   nextDate?: string;
+};
+
+export type UpdateMaintenanceEventInput = {
+  typeId: MaintenanceEventTypeId;
+  customName?: string;
+  intervalKm?: number;
+  intervalMonths?: number;
+  lastExecutionKm?: number;
+  lastExecutionDate?: string;
 };
 
 export type CustomMaintenanceExecutionInput = {
@@ -133,6 +146,11 @@ export type VehicleState = {
     eventId: string,
     input: MaintenanceExecutionInput,
   ) => Promise<MaintenanceExecution>;
+  updateMaintenanceEvent: (
+    eventId: string,
+    input: UpdateMaintenanceEventInput,
+  ) => Promise<MaintenanceEvent>;
+  deleteMaintenanceEvent: (eventId: string) => Promise<void>;
   recordKm: (vehicleId: string, currentKm: number, recordedAt?: string) => Promise<KmRecord>;
   updateKm: (vehicleId: string, currentKm: number) => Promise<void>;
   setKmPromptFrequency: (frequency: KmPromptFrequency) => Promise<void>;
@@ -197,6 +215,15 @@ function isValidMaintenanceEvent(value: unknown): value is MaintenanceEvent {
     isMaintenanceEventTypeId(event.typeId) &&
     typeof event.name === "string" &&
     typeof event.createdAt === "string" &&
+    (event.intervalKm === undefined ||
+      (Number.isInteger(event.intervalKm) && event.intervalKm > 0)) &&
+    (event.intervalMonths === undefined ||
+      (Number.isInteger(event.intervalMonths) && event.intervalMonths > 0)) &&
+    (event.lastExecutionKm === undefined ||
+      (Number.isInteger(event.lastExecutionKm) && event.lastExecutionKm >= 0)) &&
+    (event.lastExecutionDate === undefined ||
+      (typeof event.lastExecutionDate === "string" &&
+        !Number.isNaN(Date.parse(event.lastExecutionDate)))) &&
     (event.nextKm === undefined || typeof event.nextKm === "number") &&
     (event.nextDate === undefined || typeof event.nextDate === "string")
   );
@@ -443,6 +470,8 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       vehicleId,
       typeId: input.typeId,
       name,
+      intervalKm: type.intervalKm,
+      intervalMonths: type.intervalMonths,
       nextKm: input.nextKm,
       nextDate: input.nextDate,
       createdAt: new Date().toISOString(),
@@ -510,6 +539,10 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       vehicleId,
       typeId: type.id,
       name: type.name,
+      intervalKm: type.intervalKm,
+      intervalMonths: type.intervalMonths,
+      lastExecutionKm: input.lastExecutionKm,
+      lastExecutionDate: lastExecutionDate?.toISOString(),
       ...schedule,
       createdAt: now,
     };
@@ -567,6 +600,10 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       vehicleId,
       typeId,
       name: type.name,
+      intervalKm: type.intervalKm,
+      intervalMonths: type.intervalMonths,
+      lastExecutionKm: input.lastExecutionKm,
+      lastExecutionDate: lastExecutionDate?.toISOString(),
       ...schedule,
       createdAt: new Date().toISOString(),
     };
@@ -613,8 +650,9 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     const schedule = calculateScheduleAfterExecution({
       executionKm: input.executionKm,
       executionDate,
-      intervalKm: customType?.intervalKm ?? systemType?.intervalKm,
-      intervalMonths: customType?.intervalMonths ?? systemType?.intervalMonths,
+      intervalKm: event.intervalKm ?? customType?.intervalKm ?? systemType?.intervalKm,
+      intervalMonths:
+        event.intervalMonths ?? customType?.intervalMonths ?? systemType?.intervalMonths,
     });
     const execution: MaintenanceExecution = {
       id: createId("execution"),
@@ -628,7 +666,14 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
 
     set({
       maintenanceEvents: get().maintenanceEvents.map((item) =>
-        item.id === event.id ? { ...item, ...schedule } : item,
+        item.id === event.id
+          ? {
+              ...item,
+              lastExecutionKm: input.executionKm,
+              lastExecutionDate: executionDate.toISOString(),
+              ...schedule,
+            }
+          : item,
       ),
       executionHistory: [execution, ...get().executionHistory],
     });
@@ -642,6 +687,104 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     }
 
     return execution;
+  },
+  async updateMaintenanceEvent(eventId, input) {
+    const event = get().maintenanceEvents.find((item) => item.id === eventId);
+    if (!event) {
+      throw new Error("Manutenção não encontrada.");
+    }
+
+    const vehicle = get().vehicles.find((item) => item.id === event.vehicleId);
+    if (!vehicle) {
+      throw new Error("Veículo não encontrado.");
+    }
+
+    const customType = input.typeId.startsWith("custom-")
+      ? get().customMaintenanceTypes.find((item) => item.id === input.typeId)
+      : undefined;
+    const systemType = customType ? undefined : getMaintenanceEventType(input.typeId);
+    const name =
+      input.typeId === "custom"
+        ? normalizeMaintenanceName(input.customName ?? "")
+        : (customType?.name ?? systemType?.name);
+
+    if (!name) {
+      throw new Error(
+        input.typeId.startsWith("custom-")
+          ? "Tipo de manutenção personalizada não encontrado."
+          : "Tipo de manutenção inválido.",
+      );
+    }
+
+    const lastExecutionDate = input.lastExecutionDate
+      ? new Date(input.lastExecutionDate)
+      : undefined;
+    const validation = validateCustomMaintenanceInput({
+      name,
+      intervalKm: input.intervalKm,
+      intervalMonths: input.intervalMonths,
+      lastExecutionKm: input.lastExecutionKm,
+      lastExecutionDate,
+      currentKm: vehicle.currentKm,
+    });
+    if (!validation.isValid) {
+      throw new Error(validation.message);
+    }
+
+    const schedule = calculateCustomMaintenanceSchedule({
+      intervalKm: input.intervalKm,
+      intervalMonths: input.intervalMonths,
+      lastExecutionKm: input.lastExecutionKm,
+      lastExecutionDate,
+    });
+    const updatedEvent: MaintenanceEvent = {
+      ...event,
+      typeId: input.typeId,
+      name,
+      intervalKm: input.intervalKm,
+      intervalMonths: input.intervalMonths,
+      lastExecutionKm: input.lastExecutionKm,
+      lastExecutionDate: lastExecutionDate?.toISOString(),
+      ...schedule,
+    };
+    const previous = buildPersistedState(get());
+
+    set({
+      maintenanceEvents: get().maintenanceEvents.map((item) =>
+        item.id === eventId ? updatedEvent : item,
+      ),
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao editar manutenção.";
+      throw new Error(`Não foi possível editar a manutenção localmente. ${message}`);
+    }
+
+    return updatedEvent;
+  },
+  async deleteMaintenanceEvent(eventId) {
+    if (!get().maintenanceEvents.some((item) => item.id === eventId)) {
+      throw new Error("Manutenção não encontrada.");
+    }
+
+    const previous = buildPersistedState(get());
+    set({
+      maintenanceEvents: get().maintenanceEvents.filter((item) => item.id !== eventId),
+      executionHistory: get().executionHistory.filter(
+        (execution) => execution.vehicleEventId !== eventId,
+      ),
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao excluir manutenção.";
+      throw new Error(`Não foi possível excluir a manutenção localmente. ${message}`);
+    }
   },
   async recordKm(vehicleId, currentKm, recordedAt = new Date().toISOString()) {
     const currentVehicle = get().vehicles.find((vehicle) => vehicle.id === vehicleId);

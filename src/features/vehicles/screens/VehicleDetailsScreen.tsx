@@ -5,6 +5,7 @@ import { Alert, Modal } from "react-native";
 import { styled } from "styled-components/native";
 
 import { KmUpdateModal } from "@/features/vehicles/components/KmUpdateModal";
+import { MaintenanceEventEditModal } from "@/features/vehicles/components/MaintenanceEventEditModal";
 import { MaintenanceExecutionModal } from "@/features/vehicles/components/MaintenanceExecutionModal";
 import { Card } from "@/components/common/Card";
 import { AppText, Column, Row, Screen, ScreenContent, Title } from "@/components/common/styled";
@@ -50,6 +51,16 @@ const ExecuteButton = styled.Pressable`
   justify-content: center;
   border-radius: 8px;
   background-color: ${({ theme }) => theme.primary};
+  padding: 0 12px;
+`;
+
+const EventActionButton = styled.Pressable<{ $danger?: boolean }>`
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border-width: 1px;
+  border-color: ${({ $danger, theme }) => ($danger ? theme.primary : theme.border)};
   padding: 0 12px;
 `;
 
@@ -160,6 +171,8 @@ export default function VehicleDetailsScreen() {
   );
   const addCustomMaintenanceEvent = useVehicleStore((state) => state.addCustomMaintenanceEvent);
   const executeMaintenanceEvent = useVehicleStore((state) => state.executeMaintenanceEvent);
+  const updateMaintenanceEvent = useVehicleStore((state) => state.updateMaintenanceEvent);
+  const deleteMaintenanceEvent = useVehicleStore((state) => state.deleteMaintenanceEvent);
   const customMaintenanceTypes = useVehicleStore((state) => state.customMaintenanceTypes);
   const vehicle = useVehicleStore((state) =>
     typeof id === "string" ? state.vehicles.find((item) => item.id === id) : undefined,
@@ -169,6 +182,7 @@ export default function VehicleDetailsScreen() {
   const [isKmModalOpen, setIsKmModalOpen] = useState(false);
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [executionEvent, setExecutionEvent] = useState<MaintenanceEvent | undefined>();
+  const [editingEvent, setEditingEvent] = useState<MaintenanceEvent | undefined>();
   const [selectedTypeId, setSelectedTypeId] =
     useState<MaintenanceEventTypeId>("alignment-balancing");
   const [customName, setCustomName] = useState("");
@@ -384,6 +398,27 @@ export default function VehicleDetailsScreen() {
     }
   }
 
+  function confirmDeleteMaintenance(event: MaintenanceEvent) {
+    Alert.alert(
+      "Excluir manutenção",
+      `Deseja excluir "${event.name}"? Esta ação é irreversível e também remove o histórico de execuções deste evento.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            void deleteMaintenanceEvent(event.id).catch((e: unknown) => {
+              const message =
+                e instanceof Error ? e.message : "Erro inesperado ao excluir manutenção.";
+              Alert.alert("Não foi possível excluir", message);
+            });
+          },
+        },
+      ],
+    );
+  }
+
   return (
     <>
       <Screen>
@@ -466,6 +501,29 @@ export default function VehicleDetailsScreen() {
                       Efetuar
                     </AppText>
                   </ExecuteButton>
+                  <Row $gap={8}>
+                    <EventActionButton
+                      accessibilityLabel={`Editar ${event.name}`}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setEditingEvent(event);
+                      }}
+                    >
+                      <AppText $weight={700}>Editar</AppText>
+                    </EventActionButton>
+                    <EventActionButton
+                      $danger
+                      accessibilityLabel={`Excluir ${event.name}`}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        confirmDeleteMaintenance(event);
+                      }}
+                    >
+                      <AppText $color="primary" $weight={700}>
+                        Excluir
+                      </AppText>
+                    </EventActionButton>
+                  </Row>
                 </RightColumn>
               </HistoryRow>
             ))
@@ -536,6 +594,21 @@ export default function VehicleDetailsScreen() {
         }}
         vehicle={vehicle}
         visible={Boolean(executionEvent)}
+      />
+      <MaintenanceEventEditModal
+        customMaintenanceTypes={customMaintenanceTypes}
+        event={editingEvent}
+        onDismiss={() => {
+          setEditingEvent(undefined);
+        }}
+        onSubmit={async (input) => {
+          if (!editingEvent) {
+            return;
+          }
+          await updateMaintenanceEvent(editingEvent.id, input);
+        }}
+        vehicle={vehicle}
+        visible={Boolean(editingEvent)}
       />
       <Modal
         transparent
