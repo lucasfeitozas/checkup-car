@@ -7,40 +7,27 @@ import { styled } from "styled-components/native";
 import { KmUpdateModal } from "@/features/vehicles/components/KmUpdateModal";
 import { Card } from "@/components/common/Card";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
-import {
-  AppText,
-  Bullet,
-  Column,
-  Row,
-  Screen,
-  SectionTitle,
-  Title,
-} from "@/components/common/styled";
+import { AppText, Column, Row, Screen, SectionTitle, Title } from "@/components/common/styled";
 import { useVehicleStore } from "@/features/vehicles/stores/vehicleStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
 import { normalizeKmReminderPreference } from "@/features/vehicles/rules/kmReminder";
-import {
-  countMaintenanceAlerts,
-  type MaintenanceAlertLevel,
-} from "@/features/vehicles/rules/maintenanceEventList";
+import type { MaintenanceAlertLevel } from "@/features/vehicles/rules/maintenanceEventList";
 import { scheduleVehicleKmReminder } from "@/core/notifications/notifications";
+import {
+  buildVehicleOverview,
+  type VehicleOverviewEvent,
+} from "@/features/dashboard/rules/vehicleOverview";
 
 const SummaryCard = styled(Card)`
+  min-width: 104px;
   flex: 1;
   min-height: 120px;
 `;
 
-const AlertStatusGrid = styled.View`
+const StatGrid = styled.View`
   flex-direction: row;
   flex-wrap: wrap;
   gap: 10px;
-`;
-
-const AlertStatusCard = styled(Card)<{ $level: MaintenanceAlertLevel }>`
-  min-width: 104px;
-  flex: 1;
-  border-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].border};
-  background-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].background};
 `;
 
 const AlertDot = styled.View<{ $level: MaintenanceAlertLevel }>`
@@ -68,6 +55,49 @@ const AlertHeader = styled(Row)<{ $active: boolean }>`
 
 const AlertBody = styled(Column)`
   padding: 12px;
+`;
+
+const VehicleSwitchGrid = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+const VehicleSwitchButton = styled.Pressable<{ $selected: boolean }>`
+  min-height: 40px;
+  justify-content: center;
+  border-radius: 8px;
+  border-width: 1px;
+  border-color: ${({ $selected, theme }) => ($selected ? theme.primary : theme.border)};
+  background-color: ${({ $selected, theme }) => ($selected ? theme.primary : "transparent")};
+  padding: 0 12px;
+`;
+
+const QuickActions = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+const QuickActionButton = styled.Pressable<{ $primary?: boolean }>`
+  min-height: 44px;
+  flex-grow: 1;
+  flex-basis: 142px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  border-width: ${({ $primary }) => ($primary ? 0 : 1)}px;
+  border-color: ${({ theme }) => theme.border};
+  background-color: ${({ $primary, theme }) => ($primary ? theme.primary : "transparent")};
+  padding: 0 12px;
+`;
+
+const EventRow = styled(Row)`
+  border-top-width: 1px;
+  border-top-color: ${({ theme }) => theme.border};
+  padding-top: 12px;
 `;
 
 const ReminderVehicleRow = styled(Column)`
@@ -117,17 +147,47 @@ const ALERT_LEVEL_COLORS: Record<
   },
 };
 
-const DASHBOARD_ALERT_LEVELS: { level: MaintenanceAlertLevel; label: string }[] = [
-  { level: "green", label: "Verde" },
-  { level: "orange", label: "Laranja" },
-  { level: "red", label: "Vermelho" },
-];
+const STATUS_LABELS: Record<VehicleOverviewEvent["status"], string> = {
+  overdue: "Vencido",
+  alert: "Em alerta",
+  pending: "Pendente",
+};
+
+function formatKm(value: number | undefined): string {
+  return value === undefined ? "-" : `${value.toLocaleString("pt-BR")} km`;
+}
+
+function formatEventDeadline(item: VehicleOverviewEvent): string {
+  const details: string[] = [];
+
+  if (item.alert.remainingKm !== undefined) {
+    if (item.alert.remainingKm <= 0) {
+      details.push(`vencido por ${Math.abs(item.alert.remainingKm).toLocaleString("pt-BR")} km`);
+    } else {
+      details.push(`${item.alert.remainingKm.toLocaleString("pt-BR")} km restantes`);
+    }
+  }
+
+  if (item.alert.remainingDays !== undefined) {
+    if (item.alert.remainingDays <= 0) {
+      details.push(
+        `data vencida há ${Math.abs(item.alert.remainingDays).toLocaleString("pt-BR")} dia(s)`,
+      );
+    } else {
+      details.push(`${item.alert.remainingDays.toLocaleString("pt-BR")} dia(s) restantes`);
+    }
+  }
+
+  return details.join(" / ") || "Sem prazo calculável";
+}
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { isDark } = useAppTheme();
   const vehicles = useVehicleStore((state) => state.vehicles);
   const maintenanceEvents = useVehicleStore((state) => state.maintenanceEvents);
+  const executionHistory = useVehicleStore((state) => state.executionHistory);
+  const kmRecords = useVehicleStore((state) => state.kmRecords);
   const hydrate = useVehicleStore((state) => state.hydrate);
   const isHydrated = useVehicleStore((state) => state.isHydrated);
   const kmReminderPreferencesByVehicleId = useVehicleStore(
@@ -138,11 +198,23 @@ export default function DashboardScreen() {
   const skipKmPromptUntilTomorrow = useVehicleStore((state) => state.skipKmPromptUntilTomorrow);
   const getVehiclesPendingKmPrompt = useVehicleStore((state) => state.getVehiclesPendingKmPrompt);
   const [promptVehicleId, setPromptVehicleId] = useState<string | null>(null);
-  const totalKm = vehicles.reduce((sum, vehicle) => sum + vehicle.currentKm, 0);
+  const [activeVehicleId, setActiveVehicleId] = useState<string | null>(null);
   const hasVehicles = vehicles.length > 0;
-  const alertCounts = useMemo(
-    () => countMaintenanceAlerts(maintenanceEvents, vehicles),
-    [maintenanceEvents, vehicles],
+  const activeVehicle = useMemo(
+    () => vehicles.find((vehicle) => vehicle.id === activeVehicleId) ?? vehicles[0] ?? null,
+    [activeVehicleId, vehicles],
+  );
+  const activeOverview = useMemo(
+    () =>
+      activeVehicle
+        ? buildVehicleOverview({
+            vehicle: activeVehicle,
+            maintenanceEvents,
+            executionHistory,
+            kmRecords,
+          })
+        : null,
+    [activeVehicle, executionHistory, kmRecords, maintenanceEvents],
   );
   const promptVehicle = useMemo(
     () => vehicles.find((vehicle) => vehicle.id === promptVehicleId) ?? null,
@@ -165,6 +237,21 @@ export default function DashboardScreen() {
       setPromptVehicleId(pendingVehicle.id);
     }
   }, [getVehiclesPendingKmPrompt, isHydrated, promptVehicleId, vehicles]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    if (vehicles.length === 0) {
+      setActiveVehicleId(null);
+      return;
+    }
+
+    if (!activeVehicleId || !vehicles.some((vehicle) => vehicle.id === activeVehicleId)) {
+      setActiveVehicleId(vehicles[0]?.id ?? null);
+    }
+  }, [activeVehicleId, isHydrated, vehicles]);
 
   async function handleReminderPreferenceChange(
     vehicleId: string,
@@ -237,68 +324,151 @@ export default function DashboardScreen() {
         </Row>
 
         <Column $gap={16}>
-          <SectionTitle>Resumo rápido</SectionTitle>
-          <Row $gap={16}>
-            <SummaryCard>
-              <Column $gap={8} $flex={1}>
-                <Row $gap={8}>
-                  <Ionicons name="car-outline" size={18} color={isDark ? "#B0BEC5" : "#757575"} />
-                  <AppText $color="muted" $size={12} $weight={500}>
-                    Veículos cadastrados
-                  </AppText>
-                </Row>
-                <AppText $size={36} $weight={700}>
-                  {isHydrated ? vehicles.length : "-"}
-                </AppText>
-                <AppText $color="muted" $size={11}>
-                  Frota registrada localmente
+          <SectionTitle>Veículo ativo</SectionTitle>
+          {!isHydrated ? (
+            <Card $gap={8}>
+              <AppText $weight={700}>Carregando painel...</AppText>
+              <AppText $color="muted">Buscando dados salvos localmente.</AppText>
+            </Card>
+          ) : !activeOverview ? (
+            <Card $gap={12}>
+              <Column $gap={4}>
+                <AppText $weight={700}>Nenhum veículo cadastrado</AppText>
+                <AppText $color="muted">
+                  Cadastre um veículo para acompanhar km, eventos e alertas.
                 </AppText>
               </Column>
-            </SummaryCard>
+              <QuickActionButton
+                accessibilityRole="button"
+                onPress={() => router.push("/(tabs)/vehicles")}
+                $primary
+              >
+                <Ionicons name="car-sport-outline" size={18} color="white" />
+                <AppText $color="white" $weight={700}>
+                  Adicionar veículo
+                </AppText>
+              </QuickActionButton>
+            </Card>
+          ) : (
+            <Card $gap={16}>
+              <Column $gap={4}>
+                <Title>{activeOverview.vehicle.nickname}</Title>
+                <AppText $color="muted" $size={16}>
+                  {activeOverview.modelDescription}
+                </AppText>
+              </Column>
 
-            <SummaryCard>
-              <Column $gap={8} $flex={1}>
-                <Row $gap={8}>
+              <StatGrid>
+                <SummaryCard $gap={8}>
+                  <AppText $color="muted" $size={12} $weight={500}>
+                    Km atual
+                  </AppText>
+                  <AppText $size={24} $weight={700}>
+                    {formatKm(activeOverview.vehicle.currentKm)}
+                  </AppText>
+                </SummaryCard>
+                <SummaryCard $gap={8}>
+                  <AppText $color="muted" $size={12} $weight={500}>
+                    Km último evento
+                  </AppText>
+                  <AppText $size={24} $weight={700}>
+                    {formatKm(activeOverview.lastEventKm)}
+                  </AppText>
+                </SummaryCard>
+              </StatGrid>
+
+              <StatGrid>
+                <SummaryCard $gap={8}>
+                  <AppText $color="muted" $size={12} $weight={500}>
+                    Eventos
+                  </AppText>
+                  <AppText $size={30} $weight={700}>
+                    {activeOverview.summary.totalEvents}
+                  </AppText>
+                </SummaryCard>
+                <SummaryCard $gap={8}>
+                  <AppText $color="muted" $size={12} $weight={500}>
+                    Em alerta
+                  </AppText>
+                  <AppText $size={30} $weight={700}>
+                    {activeOverview.summary.alertEvents}
+                  </AppText>
+                </SummaryCard>
+                <SummaryCard $gap={8}>
+                  <AppText $color="muted" $size={12} $weight={500}>
+                    Vencidos
+                  </AppText>
+                  <AppText $size={30} $weight={700}>
+                    {activeOverview.summary.overdueEvents}
+                  </AppText>
+                </SummaryCard>
+              </StatGrid>
+
+              <QuickActions>
+                <QuickActionButton
+                  accessibilityRole="button"
+                  onPress={() => setPromptVehicleId(activeOverview.vehicle.id)}
+                  $primary
+                >
+                  <Ionicons name="speedometer-outline" size={18} color="white" />
+                  <AppText $color="white" $weight={700}>
+                    Registrar km
+                  </AppText>
+                </QuickActionButton>
+                <QuickActionButton
+                  accessibilityRole="button"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/vehicle/[id]",
+                      params: { id: activeOverview.vehicle.id },
+                    })
+                  }
+                >
                   <Ionicons
-                    name="speedometer-outline"
+                    name="construct-outline"
                     size={18}
-                    color={isDark ? "#B0BEC5" : "#757575"}
+                    color={isDark ? "#FFFFFF" : "#1A1A1A"}
                   />
-                  <AppText $color="muted" $size={12} $weight={500}>
-                    Km total:
-                  </AppText>
-                </Row>
-                <AppText $size={30} $weight={700}>
-                  {isHydrated ? totalKm.toLocaleString("pt-BR") : "-"}
-                </AppText>
-                <AppText $color="muted" $size={11}>
-                  Soma da frota local
-                </AppText>
-              </Column>
-            </SummaryCard>
-          </Row>
+                  <AppText $weight={700}>Adicionar evento</AppText>
+                </QuickActionButton>
+                <QuickActionButton
+                  accessibilityRole="button"
+                  onPress={() => router.push("/(tabs)/vehicles")}
+                >
+                  <Ionicons
+                    name="swap-horizontal-outline"
+                    size={18}
+                    color={isDark ? "#FFFFFF" : "#1A1A1A"}
+                  />
+                  <AppText $weight={700}>Trocar veículo</AppText>
+                </QuickActionButton>
+              </QuickActions>
 
-          <AlertStatusGrid>
-            {DASHBOARD_ALERT_LEVELS.map(({ level, label }) => {
-              const color = ALERT_LEVEL_COLORS[level].text;
-              return (
-                <AlertStatusCard key={level} $level={level} $gap={8}>
-                  <Row $gap={8}>
-                    <AlertDot $level={level} />
-                    <AppText style={{ color }} $size={12} $weight={700}>
-                      {label}
-                    </AppText>
-                  </Row>
-                  <AppText style={{ color }} $size={30} $weight={700}>
-                    {isHydrated ? alertCounts[level] : "-"}
-                  </AppText>
-                  <AppText style={{ color }} $size={11}>
-                    Manutenção(ões)
-                  </AppText>
-                </AlertStatusCard>
-              );
-            })}
-          </AlertStatusGrid>
+              {vehicles.length > 1 ? (
+                <Column $gap={8}>
+                  <AppText $weight={700}>Selecionar veículo</AppText>
+                  <VehicleSwitchGrid>
+                    {vehicles.map((vehicle) => {
+                      const isSelected = vehicle.id === activeOverview.vehicle.id;
+                      return (
+                        <VehicleSwitchButton
+                          key={vehicle.id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                          onPress={() => setActiveVehicleId(vehicle.id)}
+                          $selected={isSelected}
+                        >
+                          <AppText $color={isSelected ? "white" : "text"} $weight={700}>
+                            {vehicle.nickname}
+                          </AppText>
+                        </VehicleSwitchButton>
+                      );
+                    })}
+                  </VehicleSwitchGrid>
+                </Column>
+              ) : null}
+            </Card>
+          )}
         </Column>
 
         <Column $gap={12}>
@@ -389,57 +559,66 @@ export default function DashboardScreen() {
 
         <Column $gap={16}>
           <Row $justify="space-between">
-            <SectionTitle>Próxima revisão</SectionTitle>
+            <SectionTitle>Próximos eventos</SectionTitle>
             <Pressable onPress={() => router.push("/(tabs)/vehicles")}>
               <AppText $color="accent" $weight={700}>
-                Ver veículos
+                Ver detalhes
               </AppText>
             </Pressable>
           </Row>
           <Card padded={false} style={{ overflow: "hidden" }}>
-            <AlertHeader $active={hasVehicles} $gap={8}>
+            <AlertHeader $active={Boolean(activeOverview)} $gap={8}>
               <Ionicons
                 name={hasVehicles ? (isDark ? "construct" : "alert-circle") : "information-circle"}
                 size={20}
                 color="white"
               />
               <AppText $color="white" $weight={700} $uppercase>
-                {hasVehicles ? "Acompanhamento local" : "Nenhum veículo cadastrado"}
+                {activeOverview ? activeOverview.vehicle.nickname : "Nenhum veículo cadastrado"}
               </AppText>
             </AlertHeader>
 
-            <AlertBody $gap={8}>
-              <AppText $weight={700} $lineHeight={20}>
-                {hasVehicles
-                  ? "Nenhuma revisão pendente foi registrada para a frota atual."
-                  : "Cadastre um veículo para acompanhar quilometragem e revisões."}
-              </AppText>
-
-              <Column $gap={6}>
-                <Row $gap={8}>
-                  <Bullet />
-                  <AppText>
-                    <AppText $weight={700}>Frota:</AppText>{" "}
-                    {isHydrated ? `${vehicles.length} veículo(s)` : "Carregando..."}
-                  </AppText>
-                </Row>
-                <Row $gap={8}>
-                  <Bullet />
-                  <AppText>
-                    <AppText $weight={700}>Km total:</AppText>{" "}
-                    {isHydrated ? `${totalKm.toLocaleString("pt-BR")} km` : "Carregando..."}
-                  </AppText>
-                </Row>
-                <Row $gap={8}>
-                  <Bullet />
-                  <AppText>
-                    <AppText $weight={700}>Ação recomendada:</AppText>{" "}
-                    {hasVehicles
-                      ? "Revise os veículos cadastrados."
-                      : "Adicione o primeiro veículo."}
-                  </AppText>
-                </Row>
-              </Column>
+            <AlertBody $gap={12}>
+              {!activeOverview ? (
+                <AppText $color="muted">
+                  Cadastre um veículo para acompanhar manutenções pendentes.
+                </AppText>
+              ) : activeOverview.upcomingEvents.length === 0 ? (
+                <AppText $color="muted">Nenhum evento cadastrado para o veículo ativo.</AppText>
+              ) : (
+                activeOverview.upcomingEvents.slice(0, 5).map((item) => {
+                  const color = ALERT_LEVEL_COLORS[item.alert.level].text;
+                  return (
+                    <EventRow
+                      key={item.event.id}
+                      $align="flex-start"
+                      $justify="space-between"
+                      $gap={12}
+                    >
+                      <Column $gap={5} $flex={1}>
+                        <AppText $weight={700}>{item.event.name}</AppText>
+                        <Row $gap={6}>
+                          <AlertDot $level={item.alert.level} />
+                          <AppText style={{ color }} $size={12} $weight={700}>
+                            {STATUS_LABELS[item.status]}
+                          </AppText>
+                        </Row>
+                        <AppText $color="muted" $size={12}>
+                          {formatEventDeadline(item)}
+                        </AppText>
+                      </Column>
+                      <Column $gap={4}>
+                        <AppText $weight={700}>{formatKm(item.event.nextKm)}</AppText>
+                        <AppText $color="muted" $size={12}>
+                          {item.event.nextDate
+                            ? new Date(item.event.nextDate).toLocaleDateString("pt-BR")
+                            : "Sem data"}
+                        </AppText>
+                      </Column>
+                    </EventRow>
+                  );
+                })
+              )}
             </AlertBody>
           </Card>
         </Column>
