@@ -19,10 +19,34 @@ import {
 import { useVehicleStore } from "@/features/vehicles/stores/vehicleStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
 import type { KmPromptFrequency } from "@/features/vehicles/rules/kmReminder";
+import {
+  countMaintenanceAlerts,
+  type MaintenanceAlertLevel,
+} from "@/features/vehicles/rules/maintenanceEventList";
 
 const SummaryCard = styled(Card)`
   flex: 1;
   min-height: 120px;
+`;
+
+const AlertStatusGrid = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+`;
+
+const AlertStatusCard = styled(Card)<{ $level: MaintenanceAlertLevel }>`
+  min-width: 104px;
+  flex: 1;
+  border-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].border};
+  background-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].background};
+`;
+
+const AlertDot = styled.View<{ $level: MaintenanceAlertLevel }>`
+  width: 9px;
+  height: 9px;
+  border-radius: 5px;
+  background-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].dot};
 `;
 
 const FrequencyButton = styled.Pressable<{ $selected: boolean }>`
@@ -46,10 +70,47 @@ const AlertBody = styled(Column)`
   padding: 12px;
 `;
 
+const ALERT_LEVEL_COLORS: Record<
+  MaintenanceAlertLevel,
+  { background: string; border: string; dot: string; text: string }
+> = {
+  neutral: {
+    background: "#F5F5F5",
+    border: "#D4D4D4",
+    dot: "#9CA3AF",
+    text: "#525252",
+  },
+  green: {
+    background: "#ECFDF3",
+    border: "#86EFAC",
+    dot: "#16A34A",
+    text: "#166534",
+  },
+  orange: {
+    background: "#FFF7ED",
+    border: "#FDBA74",
+    dot: "#F97316",
+    text: "#9A3412",
+  },
+  red: {
+    background: "#FEF2F2",
+    border: "#FCA5A5",
+    dot: "#DC2626",
+    text: "#991B1B",
+  },
+};
+
+const DASHBOARD_ALERT_LEVELS: { level: MaintenanceAlertLevel; label: string }[] = [
+  { level: "green", label: "Verde" },
+  { level: "orange", label: "Laranja" },
+  { level: "red", label: "Vermelho" },
+];
+
 export default function DashboardScreen() {
   const router = useRouter();
   const { isDark } = useAppTheme();
   const vehicles = useVehicleStore((state) => state.vehicles);
+  const maintenanceEvents = useVehicleStore((state) => state.maintenanceEvents);
   const hydrate = useVehicleStore((state) => state.hydrate);
   const isHydrated = useVehicleStore((state) => state.isHydrated);
   const kmPromptFrequency = useVehicleStore((state) => state.kmPromptFrequency);
@@ -60,6 +121,10 @@ export default function DashboardScreen() {
   const [promptVehicleId, setPromptVehicleId] = useState<string | null>(null);
   const totalKm = vehicles.reduce((sum, vehicle) => sum + vehicle.currentKm, 0);
   const hasVehicles = vehicles.length > 0;
+  const alertCounts = useMemo(
+    () => countMaintenanceAlerts(maintenanceEvents, vehicles),
+    [maintenanceEvents, vehicles],
+  );
   const promptVehicle = useMemo(
     () => vehicles.find((vehicle) => vehicle.id === promptVehicleId) ?? null,
     [promptVehicleId, vehicles],
@@ -169,6 +234,28 @@ export default function DashboardScreen() {
               </Column>
             </SummaryCard>
           </Row>
+
+          <AlertStatusGrid>
+            {DASHBOARD_ALERT_LEVELS.map(({ level, label }) => {
+              const color = ALERT_LEVEL_COLORS[level].text;
+              return (
+                <AlertStatusCard key={level} $level={level} $gap={8}>
+                  <Row $gap={8}>
+                    <AlertDot $level={level} />
+                    <AppText style={{ color }} $size={12} $weight={700}>
+                      {label}
+                    </AppText>
+                  </Row>
+                  <AppText style={{ color }} $size={30} $weight={700}>
+                    {isHydrated ? alertCounts[level] : "-"}
+                  </AppText>
+                  <AppText style={{ color }} $size={11}>
+                    Manutenção(ões)
+                  </AppText>
+                </AlertStatusCard>
+              );
+            })}
+          </AlertStatusGrid>
         </Column>
 
         <Column $gap={12}>

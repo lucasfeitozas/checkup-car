@@ -21,11 +21,11 @@ import {
 } from "@/features/vehicles/rules/maintenanceEvents";
 import {
   filterMaintenanceEvents,
-  getMaintenanceEventStatus,
+  getMaintenanceAlert,
   sortMaintenanceEvents,
   type MaintenanceEventFilter,
   type MaintenanceEventSort,
-  type MaintenanceEventStatus,
+  type MaintenanceAlertLevel,
 } from "@/features/vehicles/rules/maintenanceEventList";
 
 const CompactScreen = styled.ScrollView.attrs(({ theme }) => ({
@@ -92,12 +92,20 @@ const PreferenceButton = styled.Pressable<{ $selected: boolean }>`
   padding: 0 12px;
 `;
 
-const StatusBadge = styled.View<{ $status: MaintenanceEventStatus }>`
+const AlertBadge = styled(Row)<{ $level: MaintenanceAlertLevel }>`
   align-self: flex-start;
   border-radius: 999px;
   border-width: 1px;
-  border-color: ${({ $status, theme }) => ($status === "pending" ? theme.border : theme.primary)};
-  padding: 4px 8px;
+  border-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].border};
+  background-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].background};
+  padding: 5px 9px;
+`;
+
+const AlertDot = styled.View<{ $level: MaintenanceAlertLevel }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background-color: ${({ $level }) => ALERT_LEVEL_COLORS[$level].dot};
 `;
 
 const RightColumn = styled(Column)`
@@ -209,11 +217,64 @@ const FILTER_OPTIONS: { value: MaintenanceEventFilter; label: string }[] = [
   { value: "completed", label: "Concluídos" },
 ];
 
-const STATUS_LABELS: Record<MaintenanceEventStatus, string> = {
-  pending: "Pendente",
-  alert: "Em alerta",
-  overdue: "Vencido",
+const ALERT_LEVEL_COLORS: Record<
+  MaintenanceAlertLevel,
+  { background: string; border: string; dot: string; text: string }
+> = {
+  neutral: {
+    background: "#F5F5F5",
+    border: "#D4D4D4",
+    dot: "#9CA3AF",
+    text: "#525252",
+  },
+  green: {
+    background: "#ECFDF3",
+    border: "#86EFAC",
+    dot: "#16A34A",
+    text: "#166534",
+  },
+  orange: {
+    background: "#FFF7ED",
+    border: "#FDBA74",
+    dot: "#F97316",
+    text: "#9A3412",
+  },
+  red: {
+    background: "#FEF2F2",
+    border: "#FCA5A5",
+    dot: "#DC2626",
+    text: "#991B1B",
+  },
 };
+
+const ALERT_LABELS: Record<MaintenanceAlertLevel, string> = {
+  neutral: "Neutro",
+  green: "Verde",
+  orange: "Laranja",
+  red: "Vermelho",
+};
+
+function formatAlertDetail(event: MaintenanceEvent, currentKm: number): string {
+  const alert = getMaintenanceAlert(event, currentKm);
+
+  if (alert.remainingKm !== undefined && alert.remainingKm <= 0) {
+    return "Manutenção vencida por km";
+  }
+
+  if (alert.remainingDays !== undefined && alert.remainingDays <= 0) {
+    return "Data limite vencida";
+  }
+
+  const details: string[] = [];
+  if (alert.remainingKm !== undefined) {
+    details.push(`${alert.remainingKm.toLocaleString("pt-BR")} km restantes`);
+  }
+  if (alert.remainingDays !== undefined) {
+    details.push(`${alert.remainingDays.toLocaleString("pt-BR")} dia(s) restantes`);
+  }
+
+  return details.join(" / ") || "Sem prazo calculável";
+}
 
 export default function VehicleDetailsScreen() {
   const router = useRouter();
@@ -616,73 +677,74 @@ export default function VehicleDetailsScreen() {
                 : "Nenhuma manutenção cadastrada."}
             </AppText>
           ) : (
-            maintenanceEvents.map((event) => (
-              <HistoryRow key={event.id} $align="flex-start" $justify="space-between">
-                <Column $gap={6} $flex={1}>
-                  <AppText $weight={700}>{event.name}</AppText>
-                  <StatusBadge $status={getMaintenanceEventStatus(event, vehicle.currentKm)}>
-                    <AppText
-                      $color={
-                        getMaintenanceEventStatus(event, vehicle.currentKm) === "pending"
-                          ? "muted"
-                          : "primary"
-                      }
-                      $size={12}
-                      $weight={700}
-                    >
-                      {STATUS_LABELS[getMaintenanceEventStatus(event, vehicle.currentKm)]}
-                    </AppText>
-                  </StatusBadge>
-                  <AppText $color="muted" $size={12}>
-                    Criada em {new Date(event.createdAt).toLocaleDateString("pt-BR")}
-                  </AppText>
-                </Column>
-                <RightColumn $gap={8}>
-                  <AppText $weight={600}>
-                    {event.nextKm === undefined
-                      ? "Sem km"
-                      : `${event.nextKm.toLocaleString("pt-BR")} km`}
-                  </AppText>
-                  <AppText $color="muted" $size={12}>
-                    {formatMaintenanceDate(event.nextDate)}
-                  </AppText>
-                  <ExecuteButton
-                    accessibilityLabel={`Efetuar ${event.name}`}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setExecutionEvent(event);
-                    }}
-                  >
-                    <AppText $color="white" $weight={700}>
-                      Efetuar
-                    </AppText>
-                  </ExecuteButton>
-                  <Row $gap={8}>
-                    <EventActionButton
-                      accessibilityLabel={`Editar ${event.name}`}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        setEditingEvent(event);
-                      }}
-                    >
-                      <AppText $weight={700}>Editar</AppText>
-                    </EventActionButton>
-                    <EventActionButton
-                      $danger
-                      accessibilityLabel={`Excluir ${event.name}`}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        confirmDeleteMaintenance(event);
-                      }}
-                    >
-                      <AppText $color="primary" $weight={700}>
-                        Excluir
+            maintenanceEvents.map((event) => {
+              const alert = getMaintenanceAlert(event, vehicle.currentKm);
+              const alertTextColor = ALERT_LEVEL_COLORS[alert.level].text;
+
+              return (
+                <HistoryRow key={event.id} $align="flex-start" $justify="space-between">
+                  <Column $gap={6} $flex={1}>
+                    <AppText $weight={700}>{event.name}</AppText>
+                    <AlertBadge $level={alert.level} $gap={6}>
+                      <AlertDot $level={alert.level} />
+                      <AppText style={{ color: alertTextColor }} $size={12} $weight={700}>
+                        {ALERT_LABELS[alert.level]}
                       </AppText>
-                    </EventActionButton>
-                  </Row>
-                </RightColumn>
-              </HistoryRow>
-            ))
+                    </AlertBadge>
+                    <AppText $color="muted" $size={12}>
+                      {formatAlertDetail(event, vehicle.currentKm)}
+                    </AppText>
+                    <AppText $color="muted" $size={12}>
+                      Criada em {new Date(event.createdAt).toLocaleDateString("pt-BR")}
+                    </AppText>
+                  </Column>
+                  <RightColumn $gap={8}>
+                    <AppText $weight={600}>
+                      {event.nextKm === undefined
+                        ? "Sem km"
+                        : `${event.nextKm.toLocaleString("pt-BR")} km`}
+                    </AppText>
+                    <AppText $color="muted" $size={12}>
+                      {formatMaintenanceDate(event.nextDate)}
+                    </AppText>
+                    <ExecuteButton
+                      accessibilityLabel={`Efetuar ${event.name}`}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setExecutionEvent(event);
+                      }}
+                    >
+                      <AppText $color="white" $weight={700}>
+                        Efetuar
+                      </AppText>
+                    </ExecuteButton>
+                    <Row $gap={8}>
+                      <EventActionButton
+                        accessibilityLabel={`Editar ${event.name}`}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setEditingEvent(event);
+                        }}
+                      >
+                        <AppText $weight={700}>Editar</AppText>
+                      </EventActionButton>
+                      <EventActionButton
+                        $danger
+                        accessibilityLabel={`Excluir ${event.name}`}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          confirmDeleteMaintenance(event);
+                        }}
+                      >
+                        <AppText $color="primary" $weight={700}>
+                          Excluir
+                        </AppText>
+                      </EventActionButton>
+                    </Row>
+                  </RightColumn>
+                </HistoryRow>
+              );
+            })
           )}
         </Card>
 
