@@ -11,6 +11,7 @@ type KmUpdateModalProps = {
   vehicle: Vehicle | null;
   onSubmit: (km: number) => Promise<void>;
   onDismiss: () => Promise<void> | void;
+  dismissLabel?: string;
 };
 
 const Overlay = styled.View`
@@ -52,7 +53,13 @@ const ModalButton = styled.Pressable<{ $primary?: boolean; disabled?: boolean }>
   padding: 0 16px;
 `;
 
-export function KmUpdateModal({ visible, vehicle, onSubmit, onDismiss }: KmUpdateModalProps) {
+export function KmUpdateModal({
+  visible,
+  vehicle,
+  onSubmit,
+  onDismiss,
+  dismissLabel = "Agora não",
+}: KmUpdateModalProps) {
   const { theme } = useAppTheme();
   const [km, setKm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -131,7 +138,7 @@ export function KmUpdateModal({ visible, vehicle, onSubmit, onDismiss }: KmUpdat
 
           <Row $gap={12}>
             <ModalButton accessibilityRole="button" onPress={onDismiss} disabled={isSaving}>
-              <AppText $weight={700}>Agora não</AppText>
+              <AppText $weight={700}>{dismissLabel}</AppText>
             </ModalButton>
             <ModalButton
               accessibilityRole="button"
