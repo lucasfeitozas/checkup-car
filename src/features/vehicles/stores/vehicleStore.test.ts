@@ -35,6 +35,7 @@ describe("vehicleStore", () => {
       maintenanceEventFilter: "all",
       kmPromptFrequency: "daily",
       lastKmPromptAtByVehicleId: {},
+      kmReminderPreferencesByVehicleId: {},
       isHydrated: false,
     });
     secureStoreMock.setItemAsync.mockResolvedValue();
@@ -136,6 +137,14 @@ describe("vehicleStore", () => {
       maintenanceEventFilter: "alert",
       kmPromptFrequency: "weekly",
       lastKmPromptAtByVehicleId: { "v-1": "2026-06-01T10:00:00.000Z" },
+      kmReminderPreferencesByVehicleId: {
+        "v-1": {
+          enabled: false,
+          hour: 9,
+          minute: 30,
+          notificationId: "notification-1",
+        },
+      },
     };
     secureStoreMock.getItemAsync.mockImplementation(async (k) =>
       k === key ? JSON.stringify(stored) : null,
@@ -625,22 +634,51 @@ describe("vehicleStore", () => {
     expect(useVehicleStore.getState().executionHistory).toEqual([execution]);
   });
 
-  it("returns vehicles pending km prompt according to configured frequency", async () => {
+  it("returns vehicles pending km prompt when km was not recorded today", async () => {
     const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
-
-    await useVehicleStore.getState().markKmPromptShown(created.id, "2026-06-05T12:00:00.000Z");
 
     expect(
       useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T11:59:00.000Z")),
-    ).toEqual([]);
-    expect(
-      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T12:01:00.000Z")),
     ).toEqual([expect.objectContaining({ id: created.id })]);
 
-    await useVehicleStore.getState().setKmPromptFrequency("weekly");
+    await useVehicleStore.getState().recordKm(created.id, 43000, "2026-06-06T12:00:00.000Z");
+
     expect(
-      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-07T12:01:00.000Z")),
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T12:01:00.000Z")),
     ).toEqual([]);
+  });
+
+  it("persists per-vehicle km reminder preferences and skip until tomorrow", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+
+    await useVehicleStore.getState().setKmReminderPreference(created.id, {
+      enabled: false,
+      hour: 19,
+      minute: 45,
+      notificationId: "notification-1",
+    });
+
+    expect(useVehicleStore.getState().kmReminderPreferencesByVehicleId[created.id]).toMatchObject({
+      enabled: false,
+      hour: 19,
+      minute: 45,
+      notificationId: "notification-1",
+    });
+    expect(
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T12:00:00.000Z")),
+    ).toEqual([]);
+
+    await useVehicleStore.getState().setKmReminderPreference(created.id, { enabled: true });
+    await useVehicleStore
+      .getState()
+      .skipKmPromptUntilTomorrow(created.id, new Date("2026-06-06T12:00:00.000Z"));
+
+    expect(
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-06T13:00:00.000Z")),
+    ).toEqual([]);
+    expect(
+      useVehicleStore.getState().getVehiclesPendingKmPrompt(new Date("2026-06-07T04:01:00.000Z")),
+    ).toEqual([expect.objectContaining({ id: created.id })]);
   });
 
   it("returns the created vehicle after addVehicle", async () => {

@@ -1,8 +1,16 @@
 import { create } from "zustand";
 
 import { useAuthStore } from "@/features/auth/stores/authStore";
-import type { KmPromptFrequency } from "@/features/vehicles/rules/kmReminder";
-import { shouldRequestKmUpdate } from "@/features/vehicles/rules/kmReminder";
+import type {
+  KmPromptFrequency,
+  VehicleKmReminderPreference,
+} from "@/features/vehicles/rules/kmReminder";
+import {
+  DEFAULT_KM_REMINDER_PREFERENCE,
+  getTomorrowSkipUntil,
+  normalizeKmReminderPreference,
+  shouldRequestDailyKmUpdate,
+} from "@/features/vehicles/rules/kmReminder";
 import type {
   MaintenanceEventFilter,
   MaintenanceEventSort,
@@ -132,6 +140,7 @@ export type VehicleState = {
   maintenanceEventFilter: MaintenanceEventFilter;
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
+  kmReminderPreferencesByVehicleId: Record<string, VehicleKmReminderPreference>;
   isHydrated: boolean;
   hydrate: () => Promise<void>;
   addVehicle: (vehicle: NewVehicleInput) => Promise<Vehicle>;
@@ -160,9 +169,14 @@ export type VehicleState = {
   recordKm: (vehicleId: string, currentKm: number, recordedAt?: string) => Promise<KmRecord>;
   updateKm: (vehicleId: string, currentKm: number) => Promise<void>;
   setKmPromptFrequency: (frequency: KmPromptFrequency) => Promise<void>;
+  setKmReminderPreference: (
+    vehicleId: string,
+    preference: Partial<VehicleKmReminderPreference>,
+  ) => Promise<void>;
   setMaintenanceEventSort: (sort: MaintenanceEventSort) => Promise<void>;
   setMaintenanceEventFilter: (filter: MaintenanceEventFilter) => Promise<void>;
   markKmPromptShown: (vehicleId: string, promptedAt?: string) => Promise<void>;
+  skipKmPromptUntilTomorrow: (vehicleId: string, now?: Date) => Promise<void>;
   getVehicleById: (vehicleId: string) => Vehicle | undefined;
   getVehicleList: () => VehicleListItem[];
   getKmRecordsByVehicleId: (vehicleId: string) => KmRecord[];
@@ -197,6 +211,7 @@ type PersistedVehicleState = {
   maintenanceEventFilter: MaintenanceEventFilter;
   kmPromptFrequency: KmPromptFrequency;
   lastKmPromptAtByVehicleId: Record<string, string>;
+  kmReminderPreferencesByVehicleId: Record<string, VehicleKmReminderPreference>;
 };
 
 function createId(prefix: string): string {
@@ -315,6 +330,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
+      kmReminderPreferencesByVehicleId: {},
     };
   }
 
@@ -329,6 +345,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
       kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
       lastKmPromptAtByVehicleId: {},
+      kmReminderPreferencesByVehicleId: {},
     };
   }
 
@@ -346,6 +363,16 @@ function parsePersistedState(raw: string): PersistedVehicleState {
   const executionHistory = Array.isArray(state.executionHistory)
     ? state.executionHistory.filter(isValidMaintenanceExecution)
     : [];
+  const kmReminderPreferencesByVehicleId =
+    state.kmReminderPreferencesByVehicleId &&
+    typeof state.kmReminderPreferencesByVehicleId === "object"
+      ? Object.fromEntries(
+          Object.entries(state.kmReminderPreferencesByVehicleId).map(([vehicleId, preference]) => [
+            vehicleId,
+            normalizeKmReminderPreference(preference),
+          ]),
+        )
+      : {};
 
   return {
     vehicles,
@@ -366,6 +393,7 @@ function parsePersistedState(raw: string): PersistedVehicleState {
       state.lastKmPromptAtByVehicleId && typeof state.lastKmPromptAtByVehicleId === "object"
         ? state.lastKmPromptAtByVehicleId
         : {},
+    kmReminderPreferencesByVehicleId,
   };
 }
 
@@ -385,6 +413,7 @@ function buildPersistedState(state: VehicleState): PersistedVehicleState {
     maintenanceEventFilter: state.maintenanceEventFilter,
     kmPromptFrequency: state.kmPromptFrequency,
     lastKmPromptAtByVehicleId: state.lastKmPromptAtByVehicleId,
+    kmReminderPreferencesByVehicleId: state.kmReminderPreferencesByVehicleId,
   };
 }
 
@@ -398,6 +427,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
   kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
   lastKmPromptAtByVehicleId: {},
+  kmReminderPreferencesByVehicleId: {},
   isHydrated: false,
   async hydrate() {
     const key = getVehiclesStorageKey();
@@ -414,6 +444,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
+        kmReminderPreferencesByVehicleId: {},
         isHydrated: true,
       });
       return;
@@ -433,6 +464,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         maintenanceEventFilter: DEFAULT_MAINTENANCE_EVENT_FILTER,
         kmPromptFrequency: DEFAULT_KM_PROMPT_FREQUENCY,
         lastKmPromptAtByVehicleId: {},
+        kmReminderPreferencesByVehicleId: {},
         isHydrated: true,
       });
     }
@@ -470,7 +502,14 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
 
     const nextVehicles = [vehicle, ...current];
     const previous = buildPersistedState(get());
-    set({ vehicles: nextVehicles, kmRecords: [kmRecord, ...get().kmRecords] });
+    set({
+      vehicles: nextVehicles,
+      kmRecords: [kmRecord, ...get().kmRecords],
+      kmReminderPreferencesByVehicleId: {
+        ...get().kmReminderPreferencesByVehicleId,
+        [vehicle.id]: DEFAULT_KM_REMINDER_PREFERENCE,
+      },
+    });
 
     try {
       await persistVehicleState(buildPersistedState(get()));
@@ -893,6 +932,35 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       throw new Error(`Não foi possível salvar a frequência localmente. ${message}`);
     }
   },
+  async setKmReminderPreference(vehicleId, preference) {
+    if (!get().vehicles.some((vehicle) => vehicle.id === vehicleId)) {
+      throw new Error("Veículo não encontrado.");
+    }
+
+    const currentPreference = normalizeKmReminderPreference(
+      get().kmReminderPreferencesByVehicleId[vehicleId],
+    );
+    const nextPreference = normalizeKmReminderPreference({
+      ...currentPreference,
+      ...preference,
+    });
+    const previous = buildPersistedState(get());
+
+    set({
+      kmReminderPreferencesByVehicleId: {
+        ...get().kmReminderPreferencesByVehicleId,
+        [vehicleId]: nextPreference,
+      },
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar lembrete.";
+      throw new Error(`Não foi possível salvar o lembrete localmente. ${message}`);
+    }
+  },
   async setMaintenanceEventSort(sort) {
     const previous = buildPersistedState(get());
     set({ maintenanceEventSort: sort });
@@ -938,6 +1006,38 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       throw new Error(`Não foi possível salvar o lembrete localmente. ${message}`);
     }
   },
+  async skipKmPromptUntilTomorrow(vehicleId, now = new Date()) {
+    if (!get().vehicles.some((vehicle) => vehicle.id === vehicleId)) {
+      throw new Error("Veículo não encontrado.");
+    }
+
+    const currentPreference = normalizeKmReminderPreference(
+      get().kmReminderPreferencesByVehicleId[vehicleId],
+    );
+    const previous = buildPersistedState(get());
+
+    set({
+      lastKmPromptAtByVehicleId: {
+        ...get().lastKmPromptAtByVehicleId,
+        [vehicleId]: now.toISOString(),
+      },
+      kmReminderPreferencesByVehicleId: {
+        ...get().kmReminderPreferencesByVehicleId,
+        [vehicleId]: {
+          ...currentPreference,
+          skipUntil: getTomorrowSkipUntil(now),
+        },
+      },
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar lembrete.";
+      throw new Error(`Não foi possível salvar o lembrete localmente. ${message}`);
+    }
+  },
   getVehicleById(vehicleId) {
     return get().vehicles.find((vehicle) => vehicle.id === vehicleId);
   },
@@ -967,9 +1067,10 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   getVehiclesPendingKmPrompt(now = new Date()) {
     const state = get();
     return state.vehicles.filter((vehicle) =>
-      shouldRequestKmUpdate(
-        state.lastKmPromptAtByVehicleId[vehicle.id],
-        state.kmPromptFrequency,
+      shouldRequestDailyKmUpdate(
+        vehicle.id,
+        state.kmRecords,
+        state.kmReminderPreferencesByVehicleId[vehicle.id],
         now,
       ),
     );

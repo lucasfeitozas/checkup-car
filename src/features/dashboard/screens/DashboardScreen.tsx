@@ -18,11 +18,12 @@ import {
 } from "@/components/common/styled";
 import { useVehicleStore } from "@/features/vehicles/stores/vehicleStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
-import type { KmPromptFrequency } from "@/features/vehicles/rules/kmReminder";
+import { normalizeKmReminderPreference } from "@/features/vehicles/rules/kmReminder";
 import {
   countMaintenanceAlerts,
   type MaintenanceAlertLevel,
 } from "@/features/vehicles/rules/maintenanceEventList";
+import { scheduleVehicleKmReminder } from "@/core/notifications/notifications";
 
 const SummaryCard = styled(Card)`
   flex: 1;
@@ -51,7 +52,6 @@ const AlertDot = styled.View<{ $level: MaintenanceAlertLevel }>`
 
 const FrequencyButton = styled.Pressable<{ $selected: boolean }>`
   min-height: 40px;
-  flex: 1;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
@@ -68,6 +68,23 @@ const AlertHeader = styled(Row)<{ $active: boolean }>`
 
 const AlertBody = styled(Column)`
   padding: 12px;
+`;
+
+const ReminderVehicleRow = styled(Column)`
+  border-top-width: 1px;
+  border-top-color: ${({ theme }) => theme.border};
+  padding-top: 12px;
+`;
+
+const TimeInput = styled.TextInput`
+  width: 58px;
+  min-height: 40px;
+  border-radius: 8px;
+  border-width: 1px;
+  border-color: ${({ theme }) => theme.border};
+  padding: 0 10px;
+  color: ${({ theme }) => theme.text};
+  background-color: ${({ theme }) => theme.background};
 `;
 
 const ALERT_LEVEL_COLORS: Record<
@@ -113,10 +130,12 @@ export default function DashboardScreen() {
   const maintenanceEvents = useVehicleStore((state) => state.maintenanceEvents);
   const hydrate = useVehicleStore((state) => state.hydrate);
   const isHydrated = useVehicleStore((state) => state.isHydrated);
-  const kmPromptFrequency = useVehicleStore((state) => state.kmPromptFrequency);
+  const kmReminderPreferencesByVehicleId = useVehicleStore(
+    (state) => state.kmReminderPreferencesByVehicleId,
+  );
   const recordKm = useVehicleStore((state) => state.recordKm);
-  const setKmPromptFrequency = useVehicleStore((state) => state.setKmPromptFrequency);
-  const markKmPromptShown = useVehicleStore((state) => state.markKmPromptShown);
+  const setKmReminderPreference = useVehicleStore((state) => state.setKmReminderPreference);
+  const skipKmPromptUntilTomorrow = useVehicleStore((state) => state.skipKmPromptUntilTomorrow);
   const getVehiclesPendingKmPrompt = useVehicleStore((state) => state.getVehiclesPendingKmPrompt);
   const [promptVehicleId, setPromptVehicleId] = useState<string | null>(null);
   const totalKm = vehicles.reduce((sum, vehicle) => sum + vehicle.currentKm, 0);
@@ -147,11 +166,35 @@ export default function DashboardScreen() {
     }
   }, [getVehiclesPendingKmPrompt, isHydrated, promptVehicleId, vehicles]);
 
-  async function handleFrequencyChange(frequency: KmPromptFrequency) {
+  async function handleReminderPreferenceChange(
+    vehicleId: string,
+    nextPreferenceInput: { enabled?: boolean; hour?: number; minute?: number },
+  ) {
+    const vehicle = vehicles.find((item) => item.id === vehicleId);
+    if (!vehicle) {
+      return;
+    }
+
+    const currentPreference = normalizeKmReminderPreference(
+      kmReminderPreferencesByVehicleId[vehicleId],
+    );
+    const nextPreference = normalizeKmReminderPreference({
+      ...currentPreference,
+      ...nextPreferenceInput,
+    });
+
     try {
-      await setKmPromptFrequency(frequency);
+      const notificationId = await scheduleVehicleKmReminder({
+        vehicle,
+        preference: nextPreference,
+        maintenanceEvents,
+      });
+      await setKmReminderPreference(vehicleId, {
+        ...nextPreference,
+        notificationId,
+      });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar frequência.";
+      const message = e instanceof Error ? e.message : "Erro inesperado ao salvar lembrete.";
       Alert.alert("Não foi possível salvar", message);
     }
   }
@@ -172,7 +215,7 @@ export default function DashboardScreen() {
     }
 
     try {
-      await markKmPromptShown(promptVehicle.id);
+      await skipKmPromptUntilTomorrow(promptVehicle.id);
       setPromptVehicleId(null);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Erro inesperado ao salvar lembrete.";
@@ -262,31 +305,85 @@ export default function DashboardScreen() {
           <SectionTitle>Atualização de km</SectionTitle>
           <Card $gap={12}>
             <Column $gap={4}>
-              <AppText $weight={700}>Solicitar ao abrir</AppText>
+              <AppText $weight={700}>Lembrete diário por veículo</AppText>
               <AppText $color="muted">
-                Frequência usada para lembrar a atualização da km atual dos veículos.
+                Configure o horário da notificação local e o pedido de km ao abrir o app.
               </AppText>
             </Column>
-            <Row $gap={8}>
-              {(["daily", "weekly"] as const).map((frequency) => {
-                const isSelected = kmPromptFrequency === frequency;
-                return (
-                  <FrequencyButton
-                    key={frequency}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    onPress={() => {
-                      void handleFrequencyChange(frequency);
-                    }}
-                    $selected={isSelected}
-                  >
-                    <AppText $color={isSelected ? "white" : "text"} $weight={700}>
-                      {frequency === "daily" ? "Diário" : "Semanal"}
-                    </AppText>
-                  </FrequencyButton>
+
+            {!isHydrated ? (
+              <AppText $color="muted">Carregando lembretes...</AppText>
+            ) : vehicles.length === 0 ? (
+              <AppText $color="muted">Cadastre um veículo para ativar lembretes.</AppText>
+            ) : (
+              vehicles.map((vehicle) => {
+                const preference = normalizeKmReminderPreference(
+                  kmReminderPreferencesByVehicleId[vehicle.id],
                 );
-              })}
-            </Row>
+                return (
+                  <ReminderVehicleRow key={vehicle.id} $gap={10}>
+                    <Row $justify="space-between" $gap={12}>
+                      <Column $gap={2} $flex={1}>
+                        <AppText $weight={700}>{vehicle.nickname}</AppText>
+                        <AppText $color="muted" $size={12}>
+                          {vehicle.currentKm.toLocaleString("pt-BR")} km atuais
+                        </AppText>
+                      </Column>
+                      <FrequencyButton
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: preference.enabled }}
+                        onPress={() => {
+                          void handleReminderPreferenceChange(vehicle.id, {
+                            enabled: !preference.enabled,
+                          });
+                        }}
+                        $selected={preference.enabled}
+                      >
+                        <AppText $color={preference.enabled ? "white" : "text"} $weight={700}>
+                          {preference.enabled ? "Ativo" : "Inativo"}
+                        </AppText>
+                      </FrequencyButton>
+                    </Row>
+                    <Row $gap={8}>
+                      <Column $gap={4}>
+                        <AppText $color="muted" $size={12}>
+                          Hora
+                        </AppText>
+                        <TimeInput
+                          value={String(preference.hour).padStart(2, "0")}
+                          editable={preference.enabled}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          onChangeText={(value) => {
+                            const hour = Number.parseInt(value.replace(/\D/g, ""), 10);
+                            if (!Number.isNaN(hour)) {
+                              void handleReminderPreferenceChange(vehicle.id, { hour });
+                            }
+                          }}
+                        />
+                      </Column>
+                      <Column $gap={4}>
+                        <AppText $color="muted" $size={12}>
+                          Min
+                        </AppText>
+                        <TimeInput
+                          value={String(preference.minute).padStart(2, "0")}
+                          editable={preference.enabled}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          onChangeText={(value) => {
+                            const minute = Number.parseInt(value.replace(/\D/g, ""), 10);
+                            if (!Number.isNaN(minute)) {
+                              void handleReminderPreferenceChange(vehicle.id, { minute });
+                            }
+                          }}
+                        />
+                      </Column>
+                    </Row>
+                  </ReminderVehicleRow>
+                );
+              })
+            )}
           </Card>
         </Column>
 
@@ -352,6 +449,7 @@ export default function DashboardScreen() {
         vehicle={promptVehicle}
         onSubmit={handlePromptSubmit}
         onDismiss={handlePromptDismiss}
+        dismissLabel="Pular para amanhã"
       />
     </>
   );
