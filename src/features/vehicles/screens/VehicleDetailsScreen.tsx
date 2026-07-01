@@ -795,11 +795,13 @@ export default function VehicleDetailsScreen() {
 
           <ActionButton
             accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/history")}
+            onPress={() =>
+              router.push({ pathname: "/vehicle/[id]/history", params: { id: vehicle.id } })
+            }
             $flex={1}
           >
             <Ionicons name="time-outline" size={18} color="#757575" />
-            <AppText $weight={700}>Histórico</AppText>
+            <AppText $weight={700}>Dossiê</AppText>
           </ActionButton>
         </Row>
       </Screen>
