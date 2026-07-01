@@ -1,0 +1,516 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "f567af93-42dd-410e-aab2-7bb9484415a3",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "modelos_carro": {
+      "name": "modelos_carro",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "marca": {
+          "name": "marca",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelo": {
+          "name": "modelo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ano_inicio": {
+          "name": "ano_inicio",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ano_fim": {
+          "name": "ano_fim",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "modelos_carro_marca_modelo_ano_inicio_unique": {
+          "name": "modelos_carro_marca_modelo_ano_inicio_unique",
+          "columns": ["marca", "modelo", "ano_inicio"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "tipos_evento": {
+      "name": "tipos_evento",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "intervalo_km": {
+          "name": "intervalo_km",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "intervalo_meses": {
+          "name": "intervalo_meses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "origem": {
+          "name": "origem",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'sistema'"
+        }
+      },
+      "indexes": {
+        "tipos_evento_nome_origem_unique": {
+          "name": "tipos_evento_nome_origem_unique",
+          "columns": ["nome", "origem"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "tipos_evento_origem_check": {
+          "name": "tipos_evento_origem_check",
+          "value": "\"tipos_evento\".\"origem\" IN ('sistema', 'usuario')"
+        }
+      }
+    },
+    "historico_execucao": {
+      "name": "historico_execucao",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "evento_carro_id": {
+          "name": "evento_carro_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "km_execucao": {
+          "name": "km_execucao",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data_execucao": {
+          "name": "data_execucao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "valor": {
+          "name": "valor",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "local": {
+          "name": "local",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "historico_execucao_evento_carro_id_idx": {
+          "name": "historico_execucao_evento_carro_id_idx",
+          "columns": ["evento_carro_id"],
+          "isUnique": false
+        },
+        "historico_execucao_evento_carro_id_data_execucao_idx": {
+          "name": "historico_execucao_evento_carro_id_data_execucao_idx",
+          "columns": ["evento_carro_id", "data_execucao"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "historico_execucao_evento_carro_id_eventos_carro_id_fk": {
+          "name": "historico_execucao_evento_carro_id_eventos_carro_id_fk",
+          "tableFrom": "historico_execucao",
+          "tableTo": "eventos_carro",
+          "columnsFrom": ["evento_carro_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "registros_km": {
+      "name": "registros_km",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "carro_id": {
+          "name": "carro_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "km": {
+          "name": "km",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data_registro": {
+          "name": "data_registro",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "registros_km_carro_id_idx": {
+          "name": "registros_km_carro_id_idx",
+          "columns": ["carro_id"],
+          "isUnique": false
+        },
+        "registros_km_carro_id_data_registro_idx": {
+          "name": "registros_km_carro_id_data_registro_idx",
+          "columns": ["carro_id", "data_registro"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "registros_km_carro_id_carros_id_fk": {
+          "name": "registros_km_carro_id_carros_id_fk",
+          "tableFrom": "registros_km",
+          "tableTo": "carros",
+          "columnsFrom": ["carro_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "usuarios": {
+      "name": "usuarios",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "senha_hash": {
+          "name": "senha_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "google_id": {
+          "name": "google_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "foto_url": {
+          "name": "foto_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "usuarios_email_unique": {
+          "name": "usuarios_email_unique",
+          "columns": ["email"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "eventos_carro": {
+      "name": "eventos_carro",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "carro_id": {
+          "name": "carro_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipo_evento_id": {
+          "name": "tipo_evento_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ultima_km_execucao": {
+          "name": "ultima_km_execucao",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ultima_data_execucao": {
+          "name": "ultima_data_execucao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "proxima_km": {
+          "name": "proxima_km",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "proxima_data": {
+          "name": "proxima_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "eventos_carro_carro_id_idx": {
+          "name": "eventos_carro_carro_id_idx",
+          "columns": ["carro_id"],
+          "isUnique": false
+        },
+        "eventos_carro_tipo_evento_id_idx": {
+          "name": "eventos_carro_tipo_evento_id_idx",
+          "columns": ["tipo_evento_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "eventos_carro_carro_id_carros_id_fk": {
+          "name": "eventos_carro_carro_id_carros_id_fk",
+          "tableFrom": "eventos_carro",
+          "tableTo": "carros",
+          "columnsFrom": ["carro_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "eventos_carro_tipo_evento_id_tipos_evento_id_fk": {
+          "name": "eventos_carro_tipo_evento_id_tipos_evento_id_fk",
+          "tableFrom": "eventos_carro",
+          "tableTo": "tipos_evento",
+          "columnsFrom": ["tipo_evento_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "carros": {
+      "name": "carros",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "usuario_id": {
+          "name": "usuario_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelo_id": {
+          "name": "modelo_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "placa": {
+          "name": "placa",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nome_apelido": {
+          "name": "nome_apelido",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ano": {
+          "name": "ano",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "km_atual": {
+          "name": "km_atual",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "carros_usuario_id_idx": {
+          "name": "carros_usuario_id_idx",
+          "columns": ["usuario_id"],
+          "isUnique": false
+        },
+        "carros_modelo_id_idx": {
+          "name": "carros_modelo_id_idx",
+          "columns": ["modelo_id"],
+          "isUnique": false
+        },
+        "carros_usuario_id_placa_unique": {
+          "name": "carros_usuario_id_placa_unique",
+          "columns": ["usuario_id", "placa"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "carros_usuario_id_usuarios_id_fk": {
+          "name": "carros_usuario_id_usuarios_id_fk",
+          "tableFrom": "carros",
+          "tableTo": "usuarios",
+          "columnsFrom": ["usuario_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "carros_modelo_id_modelos_carro_id_fk": {
+          "name": "carros_modelo_id_modelos_carro_id_fk",
+          "tableFrom": "carros",
+          "tableTo": "modelos_carro",
+          "columnsFrom": ["modelo_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

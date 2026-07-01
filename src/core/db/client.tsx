@@ -3,6 +3,7 @@ import { drizzle, type ExpoSQLiteDatabase } from "drizzle-orm/expo-sqlite";
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
 
+import { initializeLocalDatabase } from "@/core/db/bootstrap";
 import * as schema from "@/core/db/schema";
 
 // No ambiente Web, o SharedArrayBuffer é necessário para o wa-sqlite.
@@ -17,6 +18,10 @@ const sqlite = canOpenSqlite
       useNewConnection: Platform.OS === "web",
     })
   : null;
+
+if (sqlite) {
+  initializeLocalDatabase(sqlite);
+}
 
 export const db = sqlite ? drizzle(sqlite, { schema }) : null;
 
