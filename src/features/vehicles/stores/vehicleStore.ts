@@ -161,6 +161,11 @@ export type VehicleState = {
     eventId: string,
     input: MaintenanceExecutionInput,
   ) => Promise<MaintenanceExecution>;
+  updateMaintenanceExecution: (
+    executionId: string,
+    input: MaintenanceExecutionInput,
+  ) => Promise<MaintenanceExecution>;
+  deleteMaintenanceExecution: (executionId: string) => Promise<void>;
   updateMaintenanceEvent: (
     eventId: string,
     input: UpdateMaintenanceEventInput,
@@ -182,6 +187,7 @@ export type VehicleState = {
   getKmRecordsByVehicleId: (vehicleId: string) => KmRecord[];
   getMaintenanceEventsByVehicleId: (vehicleId: string) => MaintenanceEvent[];
   getExecutionHistoryByVehicleId: (vehicleId: string) => MaintenanceExecution[];
+  getExecutionHistoryByEventId: (eventId: string) => MaintenanceExecution[];
   getVehiclesPendingKmPrompt: (now?: Date) => Vehicle[];
 };
 
@@ -414,6 +420,56 @@ function buildPersistedState(state: VehicleState): PersistedVehicleState {
     kmPromptFrequency: state.kmPromptFrequency,
     lastKmPromptAtByVehicleId: state.lastKmPromptAtByVehicleId,
     kmReminderPreferencesByVehicleId: state.kmReminderPreferencesByVehicleId,
+  };
+}
+
+function getEventScheduleIntervals(
+  event: MaintenanceEvent,
+  customMaintenanceTypes: CustomMaintenanceType[],
+) {
+  const customType = event.typeId.startsWith("custom-")
+    ? customMaintenanceTypes.find((item) => item.id === event.typeId)
+    : undefined;
+  const systemType = customType ? undefined : getMaintenanceEventType(event.typeId);
+
+  return {
+    intervalKm: event.intervalKm ?? customType?.intervalKm ?? systemType?.intervalKm,
+    intervalMonths:
+      event.intervalMonths ?? customType?.intervalMonths ?? systemType?.intervalMonths,
+  };
+}
+
+function recalculateEventFromExecutions(
+  event: MaintenanceEvent,
+  executions: MaintenanceExecution[],
+  customMaintenanceTypes: CustomMaintenanceType[],
+): MaintenanceEvent {
+  const latestExecution = executions
+    .filter((execution) => execution.vehicleEventId === event.id)
+    .sort((left, right) => Date.parse(right.executionDate) - Date.parse(left.executionDate))[0];
+
+  if (!latestExecution) {
+    const {
+      lastExecutionKm: _lastExecutionKm,
+      lastExecutionDate: _lastExecutionDate,
+      nextKm: _nextKm,
+      nextDate: _nextDate,
+      ...eventWithoutExecutionSchedule
+    } = event;
+    return eventWithoutExecutionSchedule;
+  }
+
+  const schedule = calculateScheduleAfterExecution({
+    executionKm: latestExecution.executionKm,
+    executionDate: new Date(latestExecution.executionDate),
+    ...getEventScheduleIntervals(event, customMaintenanceTypes),
+  });
+
+  return {
+    ...event,
+    lastExecutionKm: latestExecution.executionKm,
+    lastExecutionDate: latestExecution.executionDate,
+    ...schedule,
   };
 }
 
@@ -726,16 +782,10 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       throw new Error(validation.message);
     }
 
-    const customType = event.typeId.startsWith("custom-")
-      ? get().customMaintenanceTypes.find((item) => item.id === event.typeId)
-      : undefined;
-    const systemType = customType ? undefined : getMaintenanceEventType(event.typeId);
     const schedule = calculateScheduleAfterExecution({
       executionKm: input.executionKm,
       executionDate,
-      intervalKm: event.intervalKm ?? customType?.intervalKm ?? systemType?.intervalKm,
-      intervalMonths:
-        event.intervalMonths ?? customType?.intervalMonths ?? systemType?.intervalMonths,
+      ...getEventScheduleIntervals(event, get().customMaintenanceTypes),
     });
     const execution: MaintenanceExecution = {
       id: createId("execution"),
@@ -770,6 +820,95 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     }
 
     return execution;
+  },
+  async updateMaintenanceExecution(executionId, input) {
+    const execution = get().executionHistory.find((item) => item.id === executionId);
+    if (!execution) {
+      throw new Error("Registro histórico não encontrado.");
+    }
+
+    const event = get().maintenanceEvents.find((item) => item.id === execution.vehicleEventId);
+    if (!event) {
+      throw new Error("Manutenção não encontrada.");
+    }
+
+    const vehicle = get().vehicles.find((item) => item.id === event.vehicleId);
+    if (!vehicle) {
+      throw new Error("Veículo não encontrado.");
+    }
+
+    const executionDate = new Date(input.executionDate);
+    const validation = validateMaintenanceExecution({
+      executionKm: input.executionKm,
+      executionDate,
+      currentKm: vehicle.currentKm,
+      value: input.value,
+    });
+    if (!validation.isValid) {
+      throw new Error(validation.message);
+    }
+
+    const updatedExecution: MaintenanceExecution = {
+      ...execution,
+      executionKm: input.executionKm,
+      executionDate: executionDate.toISOString(),
+      value: input.value,
+      location: input.location?.trim() || undefined,
+    };
+    const previous = buildPersistedState(get());
+    const nextExecutionHistory = get().executionHistory.map((item) =>
+      item.id === executionId ? updatedExecution : item,
+    );
+
+    set({
+      executionHistory: nextExecutionHistory,
+      maintenanceEvents: get().maintenanceEvents.map((item) =>
+        item.id === event.id
+          ? recalculateEventFromExecutions(item, nextExecutionHistory, get().customMaintenanceTypes)
+          : item,
+      ),
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao editar execução.";
+      throw new Error(`Não foi possível editar a execução localmente. ${message}`);
+    }
+
+    return updatedExecution;
+  },
+  async deleteMaintenanceExecution(executionId) {
+    const execution = get().executionHistory.find((item) => item.id === executionId);
+    if (!execution) {
+      throw new Error("Registro histórico não encontrado.");
+    }
+
+    const event = get().maintenanceEvents.find((item) => item.id === execution.vehicleEventId);
+    if (!event) {
+      throw new Error("Manutenção não encontrada.");
+    }
+
+    const previous = buildPersistedState(get());
+    const nextExecutionHistory = get().executionHistory.filter((item) => item.id !== executionId);
+
+    set({
+      executionHistory: nextExecutionHistory,
+      maintenanceEvents: get().maintenanceEvents.map((item) =>
+        item.id === event.id
+          ? recalculateEventFromExecutions(item, nextExecutionHistory, get().customMaintenanceTypes)
+          : item,
+      ),
+    });
+
+    try {
+      await persistVehicleState(buildPersistedState(get()));
+    } catch (e) {
+      set(previous);
+      const message = e instanceof Error ? e.message : "Erro inesperado ao excluir execução.";
+      throw new Error(`Não foi possível excluir a execução localmente. ${message}`);
+    }
   },
   async updateMaintenanceEvent(eventId, input) {
     const event = get().maintenanceEvents.find((item) => item.id === eventId);
@@ -1062,6 +1201,11 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     );
     return get()
       .executionHistory.filter((execution) => eventIds.has(execution.vehicleEventId))
+      .sort((a, b) => Date.parse(b.executionDate) - Date.parse(a.executionDate));
+  },
+  getExecutionHistoryByEventId(eventId) {
+    return get()
+      .executionHistory.filter((execution) => execution.vehicleEventId === eventId)
       .sort((a, b) => Date.parse(b.executionDate) - Date.parse(a.executionDate));
   },
   getVehiclesPendingKmPrompt(now = new Date()) {

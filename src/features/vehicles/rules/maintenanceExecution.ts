@@ -1,4 +1,5 @@
 import { calculateCustomMaintenanceSchedule } from "@/features/vehicles/rules/maintenanceEvents";
+import type { MaintenanceExecution } from "@/features/vehicles/stores/vehicleStore";
 
 export type MaintenanceExecutionValidationInput = {
   executionKm: number;
@@ -16,6 +17,12 @@ export type MaintenanceExecutionScheduleInput = {
   executionDate: Date;
   intervalKm?: number;
   intervalMonths?: number;
+};
+
+export type MaintenanceExecutionHistorySummary = {
+  totalPaid: number;
+  averageKmInterval?: number;
+  averageDaysInterval?: number;
 };
 
 function startOfUtcDay(date: Date): Date {
@@ -63,4 +70,46 @@ export function calculateScheduleAfterExecution({
     lastExecutionKm: executionKm,
     lastExecutionDate: executionDate,
   });
+}
+
+export function sortMaintenanceExecutionsChronologically(
+  executions: MaintenanceExecution[],
+): MaintenanceExecution[] {
+  return [...executions].sort(
+    (left, right) => Date.parse(left.executionDate) - Date.parse(right.executionDate),
+  );
+}
+
+export function calculateMaintenanceExecutionHistorySummary(
+  executions: MaintenanceExecution[],
+): MaintenanceExecutionHistorySummary {
+  const orderedExecutions = sortMaintenanceExecutionsChronologically(executions);
+  const totalPaid = orderedExecutions.reduce(
+    (total, execution) => total + (execution.value ?? 0),
+    0,
+  );
+
+  if (orderedExecutions.length < 2) {
+    return { totalPaid };
+  }
+
+  let totalKmInterval = 0;
+  let totalDaysInterval = 0;
+
+  for (let index = 1; index < orderedExecutions.length; index += 1) {
+    const previous = orderedExecutions[index - 1]!;
+    const current = orderedExecutions[index]!;
+    totalKmInterval += Math.abs(current.executionKm - previous.executionKm);
+    totalDaysInterval += Math.abs(
+      Date.parse(current.executionDate) - Date.parse(previous.executionDate),
+    );
+  }
+
+  const intervalCount = orderedExecutions.length - 1;
+
+  return {
+    totalPaid,
+    averageKmInterval: Math.round(totalKmInterval / intervalCount),
+    averageDaysInterval: Math.round(totalDaysInterval / intervalCount / 86_400_000),
+  };
 }
