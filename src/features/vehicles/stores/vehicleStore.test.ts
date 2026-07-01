@@ -550,6 +550,95 @@ describe("vehicleStore", () => {
     expect(useVehicleStore.getState().maintenanceEvents).toEqual([event]);
   });
 
+  it("edits an execution and recalculates the event from the latest history item", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+    });
+    const firstExecution = await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 30000,
+      executionDate: "2026-01-10T12:00:00.000Z",
+      value: 200,
+    });
+    await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+      value: 350,
+    });
+
+    const updated = await useVehicleStore.getState().updateMaintenanceExecution(firstExecution.id, {
+      executionKm: 40500,
+      executionDate: "2026-06-20T12:00:00.000Z",
+      value: 275,
+      location: "  Oficina Sul  ",
+    });
+
+    expect(updated).toMatchObject({
+      id: firstExecution.id,
+      executionKm: 40500,
+      executionDate: "2026-06-20T12:00:00.000Z",
+      value: 275,
+      location: "Oficina Sul",
+    });
+    expect(useVehicleStore.getState().maintenanceEvents[0]).toMatchObject({
+      id: event.id,
+      lastExecutionKm: 40500,
+      lastExecutionDate: "2026-06-20T12:00:00.000Z",
+      nextKm: 50500,
+    });
+  });
+
+  it("deletes an execution and falls back to the previous latest execution", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+    });
+    const firstExecution = await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 30000,
+      executionDate: "2026-01-10T12:00:00.000Z",
+    });
+    const latestExecution = await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+    });
+
+    await useVehicleStore.getState().deleteMaintenanceExecution(latestExecution.id);
+
+    expect(useVehicleStore.getState().executionHistory).toEqual([firstExecution]);
+    expect(useVehicleStore.getState().maintenanceEvents[0]).toMatchObject({
+      id: event.id,
+      lastExecutionKm: 30000,
+      lastExecutionDate: "2026-01-10T12:00:00.000Z",
+      nextKm: 40000,
+    });
+  });
+
+  it("rolls back execution edits when local persistence fails", async () => {
+    const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
+    const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {
+      typeId: "spark-plugs",
+      nextKm: 52000,
+    });
+    const execution = await useVehicleStore.getState().executeMaintenanceEvent(event.id, {
+      executionKm: 41000,
+      executionDate: "2026-06-10T12:00:00.000Z",
+    });
+    const previousEvents = useVehicleStore.getState().maintenanceEvents;
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(
+      useVehicleStore.getState().updateMaintenanceExecution(execution.id, {
+        executionKm: 40000,
+        executionDate: "2026-05-10T12:00:00.000Z",
+      }),
+    ).rejects.toThrow(/Não foi possível editar a execução localmente/i);
+
+    expect(useVehicleStore.getState().executionHistory).toEqual([execution]);
+    expect(useVehicleStore.getState().maintenanceEvents).toEqual(previousEvents);
+  });
+
   it("edits type, interval and last execution while recalculating the schedule", async () => {
     const created = await useVehicleStore.getState().addVehicle(createVehicleInput());
     const event = await useVehicleStore.getState().addMaintenanceEvent(created.id, {

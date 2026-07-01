@@ -718,6 +718,18 @@ export default function VehicleDetailsScreen() {
                         Efetuar
                       </AppText>
                     </ExecuteButton>
+                    <EventActionButton
+                      accessibilityLabel={`Ver histórico de ${event.name}`}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        router.push({
+                          pathname: "/maintenance/[id]/history",
+                          params: { id: event.id },
+                        });
+                      }}
+                    >
+                      <AppText $weight={700}>Histórico</AppText>
+                    </EventActionButton>
                     <Row $gap={8}>
                       <EventActionButton
                         accessibilityLabel={`Editar ${event.name}`}

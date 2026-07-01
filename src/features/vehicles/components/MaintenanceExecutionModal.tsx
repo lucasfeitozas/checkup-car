@@ -4,11 +4,13 @@ import { styled } from "styled-components/native";
 
 import { AppText, Column, Row } from "@/components/common/styled";
 import {
+  formatBrazilianDateInput,
   maskBrazilianDateInput,
   validateBrazilianPastOrTodayDateInput,
 } from "@/features/vehicles/rules/maintenanceEvents";
 import type {
   MaintenanceEvent,
+  MaintenanceExecution,
   MaintenanceExecutionInput,
   Vehicle,
 } from "@/features/vehicles/stores/vehicleStore";
@@ -16,6 +18,8 @@ import type {
 type MaintenanceExecutionModalProps = {
   visible: boolean;
   event?: MaintenanceEvent;
+  execution?: MaintenanceExecution;
+  mode?: "create" | "edit";
   vehicle: Vehicle;
   onDismiss: () => void;
   onSubmit: (input: MaintenanceExecutionInput) => Promise<void>;
@@ -81,6 +85,8 @@ function parseOptionalValue(value: string): number | undefined {
 export function MaintenanceExecutionModal({
   visible,
   event,
+  execution,
+  mode = "create",
   vehicle,
   onDismiss,
   onSubmit,
@@ -98,14 +104,18 @@ export function MaintenanceExecutionModal({
       return;
     }
 
-    setExecutionKm(String(vehicle.currentKm));
-    setExecutionDate(new Date().toLocaleDateString("pt-BR"));
-    setValue("");
-    setLocation("");
+    setExecutionKm(String(execution?.executionKm ?? vehicle.currentKm));
+    setExecutionDate(
+      execution
+        ? formatBrazilianDateInput(execution.executionDate)
+        : new Date().toLocaleDateString("pt-BR"),
+    );
+    setValue(execution?.value === undefined ? "" : String(execution.value).replace(".", ","));
+    setLocation(execution?.location ?? "");
     setError(null);
     setPendingInput(null);
     setIsSaving(false);
-  }, [vehicle.currentKm, visible]);
+  }, [execution, vehicle.currentKm, visible]);
 
   function prepareConfirmation() {
     const parsedKm = Number.parseInt(executionKm, 10);
@@ -157,6 +167,8 @@ export function MaintenanceExecutionModal({
     }
   }
 
+  const isEditing = mode === "edit";
+
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onDismiss}>
       <ModalOverlay>
@@ -165,7 +177,7 @@ export function MaintenanceExecutionModal({
           <Column $gap={16}>
             <Column $gap={4}>
               <AppText $size={18} $weight={700}>
-                Efetuar manutenção
+                {isEditing ? "Editar execução" : "Efetuar manutenção"}
               </AppText>
               <AppText $color="muted">{event?.name}</AppText>
             </Column>
@@ -177,7 +189,8 @@ export function MaintenanceExecutionModal({
                 </AppText>
                 <AppText>
                   Confirme a execução em {pendingInput.executionKm.toLocaleString("pt-BR")} km. Os
-                  próximos prazos serão recalculados e o registro será salvo no histórico.
+                  próximos prazos serão recalculados e o registro será{" "}
+                  {isEditing ? "atualizado" : "salvo"} no histórico.
                 </AppText>
               </Warning>
             ) : (
@@ -276,7 +289,11 @@ export function MaintenanceExecutionModal({
                 }}
               >
                 <AppText $color="white" $weight={700}>
-                  {pendingInput ? "Confirmar execução" : "Continuar"}
+                  {pendingInput
+                    ? isEditing
+                      ? "Salvar edição"
+                      : "Confirmar execução"
+                    : "Continuar"}
                 </AppText>
               </ActionButton>
             </Row>
